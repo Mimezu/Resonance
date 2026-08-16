@@ -20,6 +20,15 @@ local EVENT_NAMES = {
     POWER = "UNIT_POWER_UPDATE",
 }
 
+local CASTING_END_EVENTS = {
+    "UNIT_SPELLCAST_STOP",
+    "UNIT_SPELLCAST_FAILED",
+    "UNIT_SPELLCAST_FAILED_QUIET",
+    "UNIT_SPELLCAST_INTERRUPTED",
+    "UNIT_SPELLCAST_CHANNEL_STOP",
+    "UNIT_SPELLCAST_EMPOWER_STOP",
+}
+
 local function GetSpecID()
     local specializationIndex = GetSpecialization and GetSpecialization()
     if not ns:IsSafeValue(specializationIndex) or type(specializationIndex) ~= "number" then
@@ -38,6 +47,9 @@ local function IncrementEventCount(event)
 end
 
 function ns:CompileRules()
+    if self.StopCastingSounds then
+        self:StopCastingSounds(0.08)
+    end
     playerFrame:UnregisterAllEvents()
     self.Runtime.activeRules = {}
     self.Runtime.eventRules = {}
@@ -67,6 +79,11 @@ function ns:CompileRules()
                 end
             elseif eventNames then
                 eventsNeeded[eventNames] = true
+            end
+            if rule.event == "CASTING_START" then
+                for _, eventName in ipairs(CASTING_END_EVENTS) do
+                    eventsNeeded[eventName] = true
+                end
             end
         end
     end
@@ -297,9 +314,16 @@ playerFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
             end)
         end
     elseif event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+        ns:StopCastingSounds(0.08)
         if not HandleEmpowerStop(arg3, arg4) and ns.DB and ns.DB.debug then
             ns:Print("Empower stopped without a completed watched release.")
         end
+    elseif event == "UNIT_SPELLCAST_STOP"
+        or event == "UNIT_SPELLCAST_FAILED"
+        or event == "UNIT_SPELLCAST_FAILED_QUIET"
+        or event == "UNIT_SPELLCAST_INTERRUPTED"
+        or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+        ns:StopCastingSounds(0.08)
     elseif event == "UNIT_AURA" then
         HandleAuraUpdate(arg2)
     elseif event == "UNIT_POWER_UPDATE" then

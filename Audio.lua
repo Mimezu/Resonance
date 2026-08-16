@@ -84,6 +84,33 @@ local function PlayResolvedSound(sound, channel)
     return accepted == true, handle
 end
 
+local CASTING_FADE_OUT_SECONDS = 0.08
+
+function ns:StopCastingSounds(fadeSeconds)
+    local runtime = self.Runtime
+    runtime.castingSoundGeneration = (runtime.castingSoundGeneration or 0) + 1
+
+    for _, timer in ipairs(runtime.castingSoundTimers or {}) do
+        if timer and timer.Cancel then
+            pcall(timer.Cancel, timer)
+        end
+    end
+    runtime.castingSoundTimers = {}
+
+    for _, handle in ipairs(runtime.castingSoundHandles or {}) do
+        if handle and StopSound then
+            pcall(StopSound, handle, fadeSeconds or CASTING_FADE_OUT_SECONDS)
+        end
+    end
+    runtime.castingSoundHandles = {}
+end
+
+local function TrackCastingHandle(handle)
+    if not handle then return end
+    ns.Runtime.castingSoundHandles = ns.Runtime.castingSoundHandles or {}
+    ns.Runtime.castingSoundHandles[#ns.Runtime.castingSoundHandles + 1] = handle
+end
+
 function ns:PlayRule(rule, preview)
     if not self.DB.enabled and not preview then
         return false, "disabled"
@@ -104,6 +131,12 @@ function ns:PlayRule(rule, preview)
 
     local soundKeys = {}
     local channel = self:GetPlaybackChannel()
+    local trackCasting = not preview and rule.event == "CASTING_START"
+    local castingGeneration
+    if trackCasting then
+        self:StopCastingSounds(CASTING_FADE_OUT_SECONDS)
+        castingGeneration = self.Runtime.castingSoundGeneration
+    end
     for _, sound in ipairs(sounds) do
         soundKeys[#soundKeys + 1] = sound.key
     end
@@ -113,14 +146,28 @@ function ns:PlayRule(rule, preview)
         if delay > 0 then
             played = true
             local queuedSound = sound
-            C_Timer.After(delay, function()
-                local accepted = PlayResolvedSound(queuedSound, channel)
-                if ns.DB and ns.DB.debug then
-                    ns:Print((accepted and "Played " or "Skipped ") .. rule.name .. " delayed layer [" .. queuedSound.key .. "]")
-                end
-            end)
+            if trackCasting then
+                local timer = C_Timer.NewTimer(delay, function()
+                    if ns.Runtime.castingSoundGeneration ~= castingGeneration then return end
+                    local accepted, handle = PlayResolvedSound(queuedSound, channel)
+                    if accepted then TrackCastingHandle(handle) end
+                    if ns.DB and ns.DB.debug then
+                        ns:Print((accepted and "Played " or "Skipped ") .. rule.name .. " delayed layer [" .. queuedSound.key .. "]")
+                    end
+                end)
+                self.Runtime.castingSoundTimers[#self.Runtime.castingSoundTimers + 1] = timer
+            else
+                C_Timer.After(delay, function()
+                    local accepted = PlayResolvedSound(queuedSound, channel)
+                    if ns.DB and ns.DB.debug then
+                        ns:Print((accepted and "Played " or "Skipped ") .. rule.name .. " delayed layer [" .. queuedSound.key .. "]")
+                    end
+                end)
+            end
         else
-            played = PlayResolvedSound(sound, channel) or played
+            local accepted, handle = PlayResolvedSound(sound, channel)
+            if trackCasting and accepted then TrackCastingHandle(handle) end
+            played = accepted or played
         end
     end
     if played and not preview then

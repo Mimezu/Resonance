@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "1.8.1"
+ns.VERSION = "1.8.2"
 ns.COLOR = "|cff9d7cff"
 ns.SPEC_ORDER = {
     71, 72, 73,       -- Warrior
@@ -106,6 +106,9 @@ ns.Runtime = {
     lastRulePlay = {},
     refreshQueued = false,
     eventCounts = {},
+    castingSoundGeneration = 0,
+    castingSoundHandles = {},
+    castingSoundTimers = {},
 }
 
 local function CopyDefaults(source)

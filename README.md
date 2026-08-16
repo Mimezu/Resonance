@@ -10,7 +10,7 @@ Resonance adds configurable, event-driven spell ambience to every Retail special
 - Hero trees color important moments when their player-side cast or aura can be verified. Observable Apex talents have explicit capability-gated rules; pet-only and automatic effects are not given fake triggers.
 - Aura data is player-only, delta-driven, guarded for secret values, and fails closed.
 - Every gameplay moment has two optional layers, independent 0–5000 ms delays, and individual previews.
-- Every real spell also exposes an optional Casting moment that fires once when its cast, channel, or empower bar starts.
+- Every real spell also exposes an optional Casting moment that fires once when its cast, channel, or empower bar starts. Its added layers stop with the cast bar using a short 80 ms fade, and delayed layers are cancelled when a cast ends early.
 - The sound picker includes verified live and legacy class spells, martial effects, and iconic encounter one-shots; retired abilities are labeled Legacy.
 - A floating sound picker organizes assets by texture, including Physical, Poison & Toxin, and Metal & Machines alongside the magical families.
 - Search scans labels and provenance across the complete library, so boss, raid, dungeon, class, and spell names remain easy to find as the catalog grows.
