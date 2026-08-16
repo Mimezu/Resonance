@@ -1,0 +1,12 @@
+# Operating-system and editor artifacts
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.tmp
+*.bak
+
+# Local packaging output
+*.zip
+release/
+dist/

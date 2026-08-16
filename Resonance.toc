@@ -1,0 +1,34 @@
+## Interface: 120100
+## Title: Resonance
+## Notes: Native, restrained sound accents for modern class gameplay.
+## Author: Miche & Codex
+## Version: 1.8.0
+## DefaultState: disabled
+## SavedVariables: ResonanceDB
+## SavedVariablesPerCharacter: ResonanceCharDB
+## IconTexture: Interface\Icons\Spell_Mage_ArcaneOrb
+## AddonCompartmentFunc: Resonance_AddonCompartmentFunction
+## Category-enUS: Combat
+
+Bootstrap.lua
+Rules_EvokerDruidShamanMonk.lua
+Rules_PaladinDKDH.lua
+Rules_MagePriestWarlock.lua
+Rules_HunterRogueWarrior.lua
+Rules_ArcaneFrost_12_1.lua
+Rules_EvokerDH_12_1.lua
+Data.lua
+BossVoices.lua
+Sounds.lua
+Presets_MagePriestWarlock.lua
+Presets_PaladinDKWarrior.lua
+Presets_HunterRogueDH.lua
+Presets_DruidShamanMonk.lua
+Presets_Evoker.lua
+Traits.lua
+Audition.lua
+Audio.lua
+Core.lua
+Options.lua
+Minimap.lua
+Commands.lua
