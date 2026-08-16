@@ -30,6 +30,152 @@ local function ApplyBackdrop(frame, color, border)
     frame:SetBackdropBorderColor(unpack(border or COLORS.border))
 end
 
+-- Replace UIPanelScrollFrameTemplate's large arrows and Blizzard artwork with
+-- a compact Resonance track. The wider transparent hit target keeps the slim
+-- visual easy to grab, while wheel, track-click and thumb dragging all remain
+-- available.
+local function SkinScrollFrame(scroll)
+    if not scroll or scroll._resonanceScrollBar then return end
+
+    local blizzardBar = scroll.ScrollBar or scroll.scrollBar
+    if not blizzardBar and scroll.GetName and scroll:GetName() then
+        blizzardBar = _G[scroll:GetName() .. "ScrollBar"]
+    end
+    if blizzardBar then
+        blizzardBar:SetAlpha(0)
+        blizzardBar:EnableMouse(false)
+        blizzardBar:Hide()
+    end
+
+    scroll:EnableMouseWheel(true)
+    if scroll.SetClipsChildren then scroll:SetClipsChildren(true) end
+
+    local track = CreateFrame("Button", nil, scroll:GetParent(), "BackdropTemplate")
+    track:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 5, 0)
+    track:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 5, 0)
+    track:SetWidth(12)
+    track:SetFrameLevel(scroll:GetFrameLevel() + 8)
+    track:EnableMouse(true)
+    ApplyBackdrop(track, { 0.025, 0.03, 0.05, 0.78 }, { 0.20, 0.15, 0.34, 0.65 })
+
+    local rail = track:CreateTexture(nil, "BACKGROUND")
+    rail:SetTexture("Interface\\Buttons\\WHITE8X8")
+    rail:SetVertexColor(0.30, 0.22, 0.48, 0.42)
+    rail:SetPoint("TOP", 0, -3)
+    rail:SetPoint("BOTTOM", 0, 3)
+    rail:SetWidth(2)
+
+    local thumb = CreateFrame("Button", nil, track, "BackdropTemplate")
+    thumb:SetWidth(6)
+    thumb:SetHeight(34)
+    thumb:SetPoint("TOP", track, "TOP", 0, -2)
+    thumb:SetFrameLevel(track:GetFrameLevel() + 1)
+    thumb:EnableMouse(true)
+    thumb:RegisterForDrag("LeftButton")
+    ApplyBackdrop(thumb, { 0.61, 0.46, 1.0, 0.88 }, { 0.72, 0.60, 1.0, 1 })
+
+    local dragging = false
+    local dragStartY, dragStartScroll
+
+    local function GetRange()
+        local range = scroll.GetVerticalScrollRange and scroll:GetVerticalScrollRange() or 0
+        return math.max(0, tonumber(range) or 0)
+    end
+
+    local function UpdateThumb()
+        local maxScroll = GetRange()
+        local trackHeight = math.max(1, track:GetHeight() - 4)
+        if maxScroll <= 0 or trackHeight <= 1 then
+            track:Hide()
+            return
+        end
+        track:Show()
+        local visibleHeight = math.max(1, scroll:GetHeight())
+        local thumbHeight = math.max(28, trackHeight * visibleHeight / (visibleHeight + maxScroll))
+        thumbHeight = math.min(trackHeight, thumbHeight)
+        thumb:SetHeight(thumbHeight)
+        local travel = math.max(0, trackHeight - thumbHeight)
+        local ratio = math.max(0, math.min(1, (tonumber(scroll:GetVerticalScroll()) or 0) / maxScroll))
+        thumb:ClearAllPoints()
+        thumb:SetPoint("TOP", track, "TOP", 0, -2 - ratio * travel)
+    end
+
+    local function StopDrag()
+        if not dragging then return end
+        dragging = false
+        thumb:SetScript("OnUpdate", nil)
+        thumb:SetBackdropColor(0.61, 0.46, 1.0, 0.88)
+        thumb:SetBackdropBorderColor(0.72, 0.60, 1.0, 1)
+    end
+
+    local function BeginDrag()
+        local _, cursorY = GetCursorPosition()
+        local scale = math.max(0.001, scroll:GetEffectiveScale())
+        dragging = true
+        dragStartY = cursorY / scale
+        dragStartScroll = tonumber(scroll:GetVerticalScroll()) or 0
+        thumb:SetBackdropColor(unpack(COLORS.teal))
+        thumb:SetBackdropBorderColor(unpack(COLORS.teal))
+        thumb:SetScript("OnUpdate", function()
+            if not IsMouseButtonDown("LeftButton") then
+                StopDrag()
+                return
+            end
+            local maxScroll = GetRange()
+            local travel = math.max(1, track:GetHeight() - 4 - thumb:GetHeight())
+            local _, currentY = GetCursorPosition()
+            local delta = dragStartY - currentY / math.max(0.001, scroll:GetEffectiveScale())
+            scroll:SetVerticalScroll(math.max(0, math.min(maxScroll, dragStartScroll + delta / travel * maxScroll)))
+            UpdateThumb()
+        end)
+    end
+
+    thumb:SetScript("OnEnter", function(self)
+        if not dragging then
+            self:SetBackdropColor(0.15, 0.82, 0.74, 0.88)
+            self:SetBackdropBorderColor(unpack(COLORS.teal))
+        end
+    end)
+    thumb:SetScript("OnLeave", function(self)
+        if not dragging then
+            self:SetBackdropColor(0.61, 0.46, 1.0, 0.88)
+            self:SetBackdropBorderColor(0.72, 0.60, 1.0, 1)
+        end
+    end)
+    thumb:SetScript("OnDragStart", BeginDrag)
+    thumb:SetScript("OnDragStop", StopDrag)
+    thumb:SetScript("OnMouseDown", function(_, button) if button == "LeftButton" then BeginDrag() end end)
+    thumb:SetScript("OnMouseUp", StopDrag)
+
+    track:SetScript("OnMouseDown", function(_, button)
+        if button ~= "LeftButton" then return end
+        local maxScroll = GetRange()
+        local scale = math.max(0.001, track:GetEffectiveScale())
+        local _, cursorY = GetCursorPosition()
+        local offset = (track:GetTop() or 0) - cursorY / scale - thumb:GetHeight() * 0.5
+        local travel = math.max(1, track:GetHeight() - 4 - thumb:GetHeight())
+        scroll:SetVerticalScroll(math.max(0, math.min(maxScroll, offset / travel * maxScroll)))
+        UpdateThumb()
+        BeginDrag()
+    end)
+    track:SetScript("OnMouseUp", StopDrag)
+
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        local maxScroll = GetRange()
+        local nextScroll = (tonumber(self:GetVerticalScroll()) or 0) - delta * 54
+        self:SetVerticalScroll(math.max(0, math.min(maxScroll, nextScroll)))
+        UpdateThumb()
+    end)
+    scroll:HookScript("OnVerticalScroll", UpdateThumb)
+    scroll:HookScript("OnScrollRangeChanged", UpdateThumb)
+    scroll:HookScript("OnSizeChanged", UpdateThumb)
+    scroll:HookScript("OnShow", function() C_Timer.After(0, UpdateThumb) end)
+
+    scroll._resonanceScrollBar = track
+    scroll._resonanceUpdateScrollBar = UpdateThumb
+    C_Timer.After(0, UpdateThumb)
+end
+
 local function CreateText(parent, template, text)
     local label = parent:CreateFontString(nil, "ARTWORK", template)
     label:SetText(text)
@@ -358,10 +504,13 @@ function ns:CreateSoundPicker()
     local categoryContent = CreateFrame("Frame", nil, categoryScroll)
     categoryContent:SetSize(114, math.max(1, #self.SoundCategories * 25 + 8))
     categoryScroll:SetScrollChild(categoryContent)
+    SkinScrollFrame(categoryScroll)
+    picker.categoryScroll = categoryScroll
     picker.categoryButtons = {}
     for index, category in ipairs(self.SoundCategories) do
         local button = CreateButton(categoryContent, category.label, 112, function()
             picker.category = category.id
+            if picker.soundScroll then picker.soundScroll:SetVerticalScroll(0) end
             if picker.search and picker.search:GetText() ~= "" then
                 picker.search:SetText("")
                 picker.search:ClearFocus()
@@ -435,6 +584,8 @@ function ns:CreateSoundPicker()
     local content = CreateFrame("Frame", nil, scroll)
     content:SetSize(552, 430)
     scroll:SetScrollChild(content)
+    SkinScrollFrame(scroll)
+    picker.soundScroll = scroll
     picker.soundContent = content
     picker.soundButtons = {}
 
@@ -612,6 +763,48 @@ function ns:CreateSoundPicker()
         self.help:SetText(ns.DB.soundSortDebug
             and "Sorting: click • Ctrl-click multi • drag to category • green selected • gold moved • red delete • save in main footer."
             or "Choose a sound family or search every source, then click a swatch to hear it. Nothing is committed until OK.")
+    end
+
+    function picker:ScrollCategoryIntoView(categoryID)
+        if not categoryID or not self.categoryScroll then return end
+        local categoryIndex
+        for index, button in ipairs(self.categoryButtons or {}) do
+            if button.categoryID == categoryID then
+                categoryIndex = index
+                break
+            end
+        end
+        if not categoryIndex then return end
+        local viewport = math.max(1, self.categoryScroll:GetHeight())
+        local itemCenter = (categoryIndex - 1) * 25 + 13
+        local maxScroll = math.max(0, tonumber(self.categoryScroll:GetVerticalScrollRange()) or 0)
+        self.categoryScroll:SetVerticalScroll(math.max(0, math.min(maxScroll, itemCenter - viewport * 0.5)))
+        if self.categoryScroll._resonanceUpdateScrollBar then
+            self.categoryScroll._resonanceUpdateScrollBar()
+        end
+    end
+
+    function picker:ScrollToSound(soundID)
+        if not soundID or not self.soundScroll then
+            if self.soundScroll then self.soundScroll:SetVerticalScroll(0) end
+            return
+        end
+        local soundIndex
+        for index, button in ipairs(self.soundButtons or {}) do
+            if button:IsShown() and button.sound and button.sound.id == soundID then
+                soundIndex = index
+                break
+            end
+        end
+        if not soundIndex then return end
+        local row = math.floor((soundIndex - 1) / 3)
+        local cardCenter = row * 64 + 29
+        local viewport = math.max(1, self.soundScroll:GetHeight())
+        local maxScroll = math.max(0, tonumber(self.soundScroll:GetVerticalScrollRange()) or 0)
+        self.soundScroll:SetVerticalScroll(math.max(0, math.min(maxScroll, cardCenter - viewport * 0.5)))
+        if self.soundScroll._resonanceUpdateScrollBar then
+            self.soundScroll._resonanceUpdateScrollBar()
+        end
     end
 
     picker.selection = CreateText(picker, "GameFontHighlight", "")
@@ -815,6 +1008,14 @@ function ns:OpenSoundPicker(initialID, callback, suggestedCategory)
     self.SoundPicker:RefreshSounds()
     self.SoundPicker:Show()
     self.SoundPicker:Raise()
+    local picker = self.SoundPicker
+    local targetID = initialID
+    local targetCategory = picker.category
+    C_Timer.After(0, function()
+        if not picker:IsShown() or picker.pendingID ~= targetID then return end
+        picker:ScrollCategoryIntoView(targetCategory)
+        picker:ScrollToSound(targetID)
+    end)
 end
 
 function ns:RefreshOptions()
@@ -1217,6 +1418,7 @@ function ns:CreateOptions()
     local content = CreateFrame("Frame", nil, scroll)
     content:SetWidth(860)
     scroll:SetScrollChild(content)
+    SkinScrollFrame(scroll)
     self.OptionsContent=content
     self.OptionsScroll=scroll
 

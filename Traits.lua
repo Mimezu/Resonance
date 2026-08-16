@@ -31,18 +31,56 @@ function ns:ScanCapabilities()
         activeHeroSpecName = nil,
     }
 
-    local activeHeroSpecID = C_ClassTalents and SafeCall(C_ClassTalents.GetActiveHeroTalentSpec)
-    if self:IsSafeValue(activeHeroSpecID) and type(activeHeroSpecID) == "number" then
-        capabilities.activeHeroSpecID = activeHeroSpecID
-        local heroInfo = SafeCall(C_ClassTalents.GetHeroTalentSpecInfo, activeHeroSpecID)
-        if self:IsSafeTable(heroInfo) and self:IsSafeValue(heroInfo.name) and type(heroInfo.name) == "string" then
-            capabilities.activeHeroSpecName = heroInfo.name
-        end
-    end
-
     local configID = C_ClassTalents and SafeCall(C_ClassTalents.GetActiveConfigID)
     if self:IsSafeValue(configID) and type(configID) == "number" then
         capabilities.configID = configID
+
+        -- GetActiveHeroTalentSpec returns a TraitSubTreeID, not a hero
+        -- specialization ID. GetHeroTalentSpecInfo accepts a different ID
+        -- namespace and can therefore return the wrong tree (for example,
+        -- Chronowarden while Flameshaper is active). Resolve the active
+        -- subtree through C_Traits, which is also what Blizzard's talent UI
+        -- and maintained talent addons use.
+        local activeSubTreeID = C_ClassTalents and SafeCall(C_ClassTalents.GetActiveHeroTalentSpec)
+        if not self:IsSafeValue(activeSubTreeID) or type(activeSubTreeID) ~= "number" then
+            activeSubTreeID = nil
+        end
+
+        -- Defensive fallback for clients where the convenience API has not
+        -- populated yet: inspect only the current specialization's subtrees
+        -- and use the one explicitly marked active.
+        if not activeSubTreeID and C_ClassTalents and C_ClassTalents.GetHeroTalentSpecsForClassSpec then
+            local specializationIndex = GetSpecialization and GetSpecialization()
+            local specID
+            if self:IsSafeValue(specializationIndex) and type(specializationIndex) == "number" then
+                specID = GetSpecializationInfo and SafeCall(GetSpecializationInfo, specializationIndex)
+            end
+            if self:IsSafeValue(specID) and type(specID) == "number" then
+                local subTreeIDs = SafeCall(C_ClassTalents.GetHeroTalentSpecsForClassSpec, configID, specID)
+                if self:IsSafeTable(subTreeIDs) then
+                    for _, subTreeID in ipairs(subTreeIDs) do
+                        if self:IsSafeValue(subTreeID) and type(subTreeID) == "number" then
+                            local subTreeInfo = C_Traits and SafeCall(C_Traits.GetSubTreeInfo, configID, subTreeID)
+                            if self:IsSafeTable(subTreeInfo) and subTreeInfo.isActive == true then
+                                activeSubTreeID = subTreeID
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if activeSubTreeID then
+            capabilities.activeHeroSpecID = activeSubTreeID
+            capabilities.activeHeroSubTreeID = activeSubTreeID
+            local subTreeInfo = C_Traits and SafeCall(C_Traits.GetSubTreeInfo, configID, activeSubTreeID)
+            if self:IsSafeTable(subTreeInfo) and self:IsSafeValue(subTreeInfo.name)
+                and type(subTreeInfo.name) == "string" then
+                capabilities.activeHeroSpecName = subTreeInfo.name
+            end
+        end
+
         local configInfo = C_Traits and SafeCall(C_Traits.GetConfigInfo, configID)
         local treeIDs
         if self:IsSafeTable(configInfo) then
@@ -56,7 +94,16 @@ function ns:ScanCapabilities()
                         for _, nodeID in ipairs(nodeIDs) do
                             local nodeInfo = SafeCall(C_Traits.GetNodeInfo, configID, nodeID)
                             if self:IsSafeTable(nodeInfo) then
-                                local activeEntry = nodeInfo.activeEntry
+                                -- Talent configurations can retain purchased
+                                -- ranks for both hero subtrees. Only scan nodes
+                                -- from the currently selected subtree; otherwise
+                                -- capability gates from both hero trees become
+                                -- true at the same time.
+                                local nodeSubTreeID = nodeInfo.subTreeID
+                                local inActiveSubTree = not (self:IsSafeValue(nodeSubTreeID)
+                                    and type(nodeSubTreeID) == "number")
+                                    or nodeSubTreeID == activeSubTreeID
+                                local activeEntry = inActiveSubTree and nodeInfo.activeEntry or nil
                                 if self:IsSafeTable(activeEntry) then
                                     local entryID = activeEntry.entryID
                                     local rank = activeEntry.rank

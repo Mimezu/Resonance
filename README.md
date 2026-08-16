@@ -17,6 +17,8 @@ Resonance adds configurable, event-driven spell ambience to every Retail special
 - Sound sets are saved per character and specialization. Every spec receives protected, hand-curated `Resonance Subtle`, `Resonance Medium`, and `Resonance Expressive` presets with distinct sound choices, delays, layers, and enabled moments; personal sets can still be created, loaded, overwritten, or deleted.
 - Presets change the actual enabled moments. There is no global density filter, priority threshold, or sound budget silently suppressing an explicitly enabled spell.
 - The compact editor uses real specialization icons, builds only the selected spec's controls, and places every moment for a spell horizontally on one card.
+- Resonance windows use slim purple/teal scrollbars with wheel, track-click, and drag support instead of Blizzard's large arrow controls.
+- Hero-tree names and capability gates come from the active trait subtree, preventing inactive hero talents from leaking into the selected build.
 - The temporary Misc family is retired. Six user-selected legacy accents were canonized into Arcane and Bronze; the other fourteen were removed.
 - The normal catalog is built for game-feel: compact casts, impacts, tails, sparks, physical hits, poison textures, mechanisms, and encounter accents that tolerate repetition.
 - Large boss signatures, recognizable machines, creature calls, and the six user-retained UI accents live in **Novelty & Fun**, away from normal spell-layer browsing.
