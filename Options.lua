@@ -281,6 +281,50 @@ local function AddTooltip(frame, title, body)
     frame:SetScript("OnLeave", GameTooltip_Hide)
 end
 
+-- Shared with PriorityFader/Frame Gambit: a compact, texture-free close
+-- control that keeps our addon windows visually consistent.
+local function CreateCloseButton(parent, callback)
+    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    button:SetSize(24, 24)
+    button:SetFrameLevel(parent:GetFrameLevel() + 20)
+    ApplyBackdrop(button, COLORS.cardAlt, COLORS.border)
+
+    local strokes = {}
+    for index, angle in ipairs({ math.pi / 4, -math.pi / 4 }) do
+        local stroke = button:CreateTexture(nil, "ARTWORK")
+        stroke:SetTexture("Interface\\Buttons\\WHITE8X8")
+        stroke:SetSize(2, 13)
+        stroke:SetPoint("CENTER")
+        stroke:SetRotation(angle)
+        stroke:SetVertexColor(unpack(COLORS.accent))
+        strokes[index] = stroke
+    end
+
+    local function Tint(color)
+        for _, stroke in ipairs(strokes) do
+            stroke:SetVertexColor(unpack(color))
+        end
+    end
+
+    button:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(0.05, 0.18, 0.17, 1)
+        self:SetBackdropBorderColor(unpack(COLORS.teal))
+        Tint(COLORS.teal)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Close", unpack(COLORS.accent))
+        GameTooltip:AddLine("Close this window.", COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], true)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(unpack(COLORS.cardAlt))
+        self:SetBackdropBorderColor(unpack(COLORS.border))
+        Tint(COLORS.accent)
+        GameTooltip_Hide()
+    end)
+    button:SetScript("OnClick", callback or function() parent:Hide() end)
+    return button
+end
+
 local function StyleButton(button, accent)
     local font = accent and WhiteButtonFont or PurpleButtonFont
     button:SetNormalFontObject(font)
@@ -477,7 +521,7 @@ function ns:CreateSoundPicker()
     dragBadge:Hide()
     picker.dragBadge = dragBadge
 
-    local close = CreateFrame("Button", nil, picker, "UIPanelCloseButton")
+    local close = CreateCloseButton(picker)
     close:SetPoint("TOPRIGHT", -4, -4)
     local title = CreateText(picker, "GameFontNormalHuge", "Sound picker")
     title:SetPoint("TOPLEFT", 18, -14)
@@ -1240,19 +1284,35 @@ local function BuildSpecSection(content, specID, y)
     return y - height - 10, section
 end
 
+local SPEC_CLASS_ID = {
+    [71]=1, [72]=1, [73]=1,
+    [65]=2, [66]=2, [70]=2,
+    [253]=3, [254]=3, [255]=3,
+    [259]=4, [260]=4, [261]=4,
+    [256]=5, [257]=5, [258]=5,
+    [250]=6, [251]=6, [252]=6,
+    [262]=7, [263]=7, [264]=7,
+    [62]=8, [63]=8, [64]=8,
+    [265]=9, [266]=9, [267]=9,
+    [268]=10, [269]=10, [270]=10,
+    [102]=11, [103]=11, [104]=11, [105]=11,
+    [577]=12, [581]=12, [1480]=12,
+    [1467]=13, [1468]=13, [1473]=13,
+}
+
 local function BuildSpecTabs(content, y)
     local tabs = CreateFrame("Frame", nil, content, "BackdropTemplate")
     local specs = ns.SPEC_ORDER
-    local columns = 18
-    local rows = math.ceil(#specs / columns)
-    local height = rows * 38 + 8
-    tabs:SetPoint("TOPLEFT",0,y); tabs:SetPoint("TOPRIGHT",0,y); tabs:SetHeight(height)
+    local buttons = {}
+    local _, _, playerClassID = UnitClass("player")
+    tabs._expanded = false
+    tabs._topY = y
+    tabs:SetPoint("TOPLEFT",0,y); tabs:SetPoint("TOPRIGHT",0,y)
     ApplyBackdrop(tabs,COLORS.card)
     for index,specID in ipairs(specs) do
         local button=CreateFrame("Button",nil,tabs,"BackdropTemplate"); button:SetSize(32,32)
-        local column = (index - 1) % columns
-        local row = math.floor((index - 1) / columns)
-        button:SetPoint("TOPLEFT",10+column*40,-5-row*38); ApplyBackdrop(button,COLORS.cardAlt,COLORS.border)
+        buttons[index] = button
+        ApplyBackdrop(button,COLORS.cardAlt,COLORS.border)
         local icon=button:CreateTexture(nil,"ARTWORK"); icon:SetPoint("TOPLEFT",3,-3); icon:SetPoint("BOTTOMRIGHT",-3,3)
         local specIcon
         if GetSpecializationInfoByID then
@@ -1273,7 +1333,65 @@ local function BuildSpecTabs(content, y)
         end
         RegisterOptionWidget(button)
     end
-    return y-height-6
+
+    local expand = CreateFrame("Button", nil, tabs, "BackdropTemplate")
+    expand:SetSize(32, 32)
+    ApplyBackdrop(expand, COLORS.cardAlt, COLORS.border)
+    local gridOffsets = { {-5, 5}, {5, 5}, {-5, -5}, {5, -5} }
+    for _, offset in ipairs(gridOffsets) do
+        local square = expand:CreateTexture(nil, "ARTWORK")
+        square:SetTexture("Interface\\Buttons\\WHITE8X8")
+        square:SetSize(7, 7)
+        square:SetPoint("CENTER", offset[1], offset[2])
+        square:SetVertexColor(unpack(COLORS.accent))
+    end
+    AddTooltip(expand, "All specializations", "Expand or collapse specializations from other classes.")
+    expand:SetScript("OnClick", function()
+        tabs._expanded = not tabs._expanded
+        tabs:Reflow(content:GetWidth())
+    end)
+
+    function tabs:Reflow(availableWidth)
+        availableWidth = math.max(40, tonumber(availableWidth) or self:GetWidth() or 0)
+        local visible = {}
+        for index, specID in ipairs(specs) do
+            local button = buttons[index]
+            local show = self._expanded or not playerClassID or SPEC_CLASS_ID[specID] == playerClassID
+            button:SetShown(show)
+            if show then visible[#visible + 1] = button end
+        end
+        visible[#visible + 1] = expand
+
+        local columns = math.max(1, math.min(#visible, math.floor((availableWidth - 20) / 40)))
+        local rows = math.ceil(#visible / columns)
+        local height = rows * 38 + 8
+        self:SetHeight(height)
+        for index, button in ipairs(visible) do
+            local column = (index - 1) % columns
+            local row = math.floor((index - 1) / columns)
+            button:ClearAllPoints()
+            button:SetPoint("TOPLEFT", 10 + column * 40, -5 - row * 38)
+        end
+        expand:SetBackdropBorderColor(unpack(self._expanded and COLORS.teal or COLORS.border))
+        expand:SetBackdropColor(unpack(self._expanded and {0.10, 0.20, 0.20, 1} or COLORS.cardAlt))
+
+        local sectionY = self._topY - height - 6
+        ns.SpecSectionY = sectionY
+        for specID, section in pairs(ns.SpecSections or {}) do
+            section:ClearAllPoints()
+            section:SetPoint("TOPLEFT", 0, sectionY)
+            section:SetPoint("TOPRIGHT", 0, sectionY)
+            ns.SpecSectionBottom[specID] = sectionY - section:GetHeight() - 10
+        end
+        local selected = ns.SelectedOptionsSpec
+        if selected and ns.SpecSectionBottom and ns.SpecSectionBottom[selected] then
+            content:SetHeight(-ns.SpecSectionBottom[selected] + 10)
+        end
+    end
+
+    ns.SpecTabs = tabs
+    tabs:Reflow(content:GetWidth())
+    return ns.SpecSectionY
 end
 
 function ns:EnsureOptionsSpec(specID)
@@ -1369,7 +1487,7 @@ function ns:CreateOptions()
     -- Keep a partially constructed panel invisible if a future widget errors.
     panel:Hide()
 
-    local close = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
+    local close = CreateCloseButton(panel)
     close:SetPoint("TOPRIGHT", -4, -4)
 
     local resizer = CreateFrame("Button", nil, panel)
@@ -1411,6 +1529,9 @@ function ns:CreateOptions()
     local version = CreateText(header, "GameFontHighlightSmall", "v" .. self.VERSION .. "  •  Retail 12.1")
     version:SetPoint("TOPRIGHT", -18, -16)
     version:SetTextColor(unpack(COLORS.teal))
+    local creator = CreateText(header, "GameFontHighlightSmall", "by Mimezu")
+    creator:SetPoint("TOPRIGHT", version, "BOTTOMRIGHT", 0, -4)
+    creator:SetTextColor(unpack(COLORS.muted))
 
     local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -12)
@@ -1433,7 +1554,11 @@ function ns:CreateOptions()
     self.SpecSections[self.SelectedOptionsSpec]:Show()
     content:SetHeight(-self.SpecSectionBottom[self.SelectedOptionsSpec]+10)
     scroll:SetScript("OnSizeChanged", function(_, width)
-        content:SetWidth(math.max(760, width - 8))
+        local contentWidth = math.max(760, width - 8)
+        content:SetWidth(contentWidth)
+        if ns.SpecTabs and ns.SpecTabs.Reflow then
+            ns.SpecTabs:Reflow(contentWidth)
+        end
     end)
 
     local preview = CreateButton(panel, "Sound library", 132, function() ns:OpenSoundPicker(nil, function() end, "arcane") end, true)

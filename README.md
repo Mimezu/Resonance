@@ -1,4 +1,4 @@
-# Resonance 1.9.0
+# Resonance 1.9.1
 
 Resonance adds configurable, event-driven spell ambience to every Retail specialization while leaving Blizzard's original spell audio untouched.
 

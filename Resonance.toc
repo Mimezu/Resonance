@@ -1,8 +1,8 @@
 ## Interface: 120100
 ## Title: Resonance
 ## Notes: Native, restrained sound accents for modern class gameplay.
-## Author: Miche & Codex
-## Version: 1.9.0
+## Author: Mimezu
+## Version: 1.9.1
 ## DefaultState: disabled
 ## SavedVariables: ResonanceDB
 ## SavedVariablesPerCharacter: ResonanceCharDB
