@@ -1172,9 +1172,11 @@ function ns:SaveCategoryDraft()
     return #export.sounds
 end
 
-function ns:GetSoundLabel(fileID)
+function ns:GetSoundLabel(fileID, preservedLabel)
     local sound = self.SoundByID[fileID]
-    return sound and sound.label or (fileID and ("Sound " .. fileID) or "Choose sound")
+    return sound and sound.label
+        or (fileID and preservedLabel and (preservedLabel .. " (missing)"))
+        or (fileID and ("Missing sound #" .. fileID) or "Choose sound")
 end
 
 function ns:GetSuggestedSoundCategory(rule)

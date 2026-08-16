@@ -432,8 +432,8 @@ local function CreateEditBox(parent, width)
     return box
 end
 
-local function ShortSoundLabel(fileID)
-    return ns:GetSoundLabel(fileID)
+local function ShortSoundLabel(fileID, preservedLabel)
+    return ns:GetSoundLabel(fileID, preservedLabel)
 end
 
 function ns:CreateSoundPicker()
@@ -892,7 +892,7 @@ local function CreateMomentCell(parent, rule, index, topOffset, cellHeight)
                 configured = configured + 1
                 GameTooltip:AddDoubleLine(
                     "Layer " .. layerIndex,
-                    string.format("%s  •  %d ms", ns:GetSoundLabel(layer.soundID), layer.delayMs or 0),
+                    string.format("%s  •  %d ms", ns:GetSoundLabel(layer.soundID, layer.soundLabel), layer.delayMs or 0),
                     COLORS.teal[1], COLORS.teal[2], COLORS.teal[3],
                     1, 1, 1
                 )
@@ -952,7 +952,7 @@ local function CreateMomentCell(parent, rule, index, topOffset, cellHeight)
         RegisterOptionWidget({refresh=function()
             local layer=ns:GetLayerConfig(rule,layerIndex)
             layerCheck:SetChecked(layer.enabled)
-            swatch:SetText(ShortSoundLabel(layer.soundID))
+            swatch:SetText(ShortSoundLabel(layer.soundID, layer.soundLabel))
             delay:SetText(layer.delayMs or 0)
         end})
         if layerIndex >= 3 then

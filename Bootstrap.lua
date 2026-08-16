@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "1.8.3"
+ns.VERSION = "1.9.0"
 ns.COLOR = "|cff9d7cff"
 ns.SPEC_ORDER = {
     71, 72, 73,       -- Warrior
@@ -61,6 +61,9 @@ ns.SUPPORTED_SPECS = {
     [1473] = "Augmentation Evoker",
 }
 ns.BUILTIN_SET_VERSION = 4
+ns.PROFILE_SCHEMA_VERSION = 1
+ns.RULE_CATALOG_VERSION = 1
+ns.SOUND_CATALOG_VERSION = 1
 ns.CURATED_PRESETS = {
     { key = "subtle", name = "Resonance Subtle" },
     { key = "medium", name = "Resonance Medium" },
@@ -68,7 +71,7 @@ ns.CURATED_PRESETS = {
 }
 
 local DEFAULTS = {
-    version = 5,
+    version = 6,
     enabled = true,
     palette = "subtle",
     channel = "SFX",
@@ -94,7 +97,7 @@ for specID in pairs(ns.SUPPORTED_SPECS) do
 end
 
 local CHARACTER_DEFAULTS = {
-    version = 3,
+    version = 4,
     specs = {},
 }
 
@@ -133,10 +136,173 @@ local function FillDefaults(target, source)
     end
 end
 
+-- Compatibility registries are intentionally permanent. Never reuse a retired
+-- rule ID for another spell; point it at its successor here instead. Removed
+-- sounds should be remapped here or retained as hidden catalog tombstones.
+local SOUND_ID_REMAP = {
+    [1884443] = 568175, -- encrypted Avenging Wrath revamp take -> verified legacy impact
+}
+local RULE_ID_ALIASES = {}
+local CATEGORY_ID_ALIASES = {}
+ns.SoundIDRemap = SOUND_ID_REMAP
+ns.RuleIDAliases = RULE_ID_ALIASES
+ns.CategoryIDAliases = CATEGORY_ID_ALIASES
+
+local function ResolveAlias(mapping, value)
+    local seen = {}
+    while mapping[value] ~= nil and not seen[value] do
+        seen[value] = true
+        value = mapping[value]
+    end
+    return value
+end
+
+local function ValidateAliasMap(name, mapping)
+    for start in pairs(mapping) do
+        local seen, value = {}, start
+        while mapping[value] ~= nil do
+            if seen[value] then
+                error("Resonance " .. name .. " alias cycle at " .. tostring(value))
+            end
+            seen[value] = true
+            value = mapping[value]
+        end
+    end
+end
+
+local function ValidateCompatibilityRegistries(owner)
+    ValidateAliasMap("sound", SOUND_ID_REMAP)
+    ValidateAliasMap("rule", RULE_ID_ALIASES)
+    ValidateAliasMap("category", CATEGORY_ID_ALIASES)
+
+    local validCategories = {}
+    for _, category in ipairs(owner.SoundCategories or {}) do validCategories[category.id] = true end
+    for oldID in pairs(SOUND_ID_REMAP) do
+        local target = ResolveAlias(SOUND_ID_REMAP, oldID)
+        if not (owner.SoundByID and owner.SoundByID[target]) then
+            owner:Print("Compatibility warning: sound " .. oldID .. " maps to missing " .. tostring(target))
+        end
+    end
+    for oldID in pairs(RULE_ID_ALIASES) do
+        local target = ResolveAlias(RULE_ID_ALIASES, oldID)
+        if not (owner.RuleByID and owner.RuleByID[target]) then
+            owner:Print("Compatibility warning: rule " .. oldID .. " maps to missing " .. tostring(target))
+        end
+    end
+    for oldID in pairs(CATEGORY_ID_ALIASES) do
+        local target = ResolveAlias(CATEGORY_ID_ALIASES, oldID)
+        if not validCategories[target] then
+            owner:Print("Compatibility warning: category " .. oldID .. " maps to missing " .. tostring(target))
+        end
+    end
+end
+
+local function RemapNumericKeyedTable(source)
+    if type(source) ~= "table" then return {} end
+    local migrated = {}
+    -- Canonical keys win if an old and a new identifier coexist.
+    for key, value in pairs(source) do
+        local soundID = tonumber(key)
+        if not soundID or ResolveAlias(SOUND_ID_REMAP, soundID) == soundID then
+            migrated[soundID or key] = value
+        end
+    end
+    for key, value in pairs(source) do
+        local soundID = tonumber(key)
+        if soundID then
+            local resolved = ResolveAlias(SOUND_ID_REMAP, soundID)
+            if migrated[resolved] == nil then migrated[resolved] = value end
+        end
+    end
+    return migrated
+end
+
+local function NormalizeAccountSoundReferences(database)
+    database.favorites = RemapNumericKeyedTable(database.favorites)
+    database.categoryDraft = RemapNumericKeyedTable(database.categoryDraft)
+    database.deleteDraft = RemapNumericKeyedTable(database.deleteDraft)
+    if type(database.categoryExport) == "table" then
+        local export = database.categoryExport
+        local hadCompactMaps = type(export.moves) == "table" or type(export.deletions) == "table"
+        if not hadCompactMaps and type(export.sounds) == "table" then
+            export.moves, export.deletions = {}, {}
+            for _, entry in ipairs(export.sounds) do
+                if type(entry) == "table" and tonumber(entry.id) then
+                    local soundID = ResolveAlias(SOUND_ID_REMAP, tonumber(entry.id))
+                    local categoryID = ResolveAlias(CATEGORY_ID_ALIASES, entry.category)
+                    local canonical = ns.SoundByID and ns.SoundByID[soundID]
+                    if canonical and categoryID and categoryID ~= canonical.category then
+                        export.moves[soundID] = categoryID
+                    end
+                    if entry.deleted then export.deletions[soundID] = true end
+                end
+            end
+        else
+            export.moves = RemapNumericKeyedTable(export.moves)
+            export.deletions = RemapNumericKeyedTable(export.deletions)
+        end
+        for soundID, categoryID in pairs(export.moves) do
+            export.moves[soundID] = ResolveAlias(CATEGORY_ID_ALIASES, categoryID)
+        end
+        if type(export.sounds) == "table" then
+            for _, sound in ipairs(export.sounds) do
+                if type(sound) == "table" and tonumber(sound.id) then
+                    sound.id = ResolveAlias(SOUND_ID_REMAP, tonumber(sound.id))
+                    sound.category = ResolveAlias(CATEGORY_ID_ALIASES, sound.category)
+                end
+            end
+        end
+    end
+
+    local validCategories = {}
+    for _, category in ipairs(ns.SoundCategories or {}) do validCategories[category.id] = true end
+    database.legacyCategoryDraft = type(database.legacyCategoryDraft) == "table"
+        and database.legacyCategoryDraft or {}
+    for soundID, categoryID in pairs(database.categoryDraft) do
+        local migratedCategory = ResolveAlias(CATEGORY_ID_ALIASES, categoryID)
+        if validCategories[migratedCategory] then
+            database.categoryDraft[soundID] = migratedCategory
+        else
+            -- Preserve the old value for a future alias while returning the
+            -- sound to its canonical category instead of hiding it.
+            database.legacyCategoryDraft[soundID] = categoryID
+            database.categoryDraft[soundID] = nil
+        end
+    end
+end
+
+local ACCOUNT_MIGRATIONS = {
+    [6] = function() end, -- Introduced ordered migrations and compatibility metadata.
+}
+
+local function RunOrderedMigrations(database, previousVersion, currentVersion, migrations)
+    previousVersion = math.max(0, math.floor(tonumber(previousVersion) or 0))
+    for version = previousVersion + 1, currentVersion do
+        local migrate = migrations[version]
+        if migrate then migrate(database) end
+        -- Advance one step at a time. If a later migration errors, WoW will not
+        -- falsely claim the database reached a schema it never completed.
+        database.version = version
+    end
+end
+
+local function MigrateAccountDatabase(database, previousVersion)
+    if previousVersion > DEFAULTS.version then return end
+    RunOrderedMigrations(database, previousVersion, DEFAULTS.version, ACCOUNT_MIGRATIONS)
+    -- Identifier aliases may grow without changing the surrounding table shape.
+    NormalizeAccountSoundReferences(database)
+    database.version = DEFAULTS.version
+end
+
 function ns:InitializeDatabase()
+    ValidateCompatibilityRegistries(self)
+    local previousAccountVersion
     if type(ResonanceDB) ~= "table" then
         ResonanceDB = CopyDefaults(DEFAULTS)
+        previousAccountVersion = DEFAULTS.version
     else
+        previousAccountVersion = tonumber(ResonanceDB.version) or 0
+        MigrateAccountDatabase(ResonanceDB, previousAccountVersion)
         if type(ResonanceDB.specEnabled) ~= "table" then ResonanceDB.specEnabled = {} end
         if type(ResonanceDB.ruleOverrides) ~= "table" then ResonanceDB.ruleOverrides = {} end
         if type(ResonanceDB.ruleSettings) ~= "table" then ResonanceDB.ruleSettings = {} end
@@ -168,12 +334,12 @@ function ns:InitializeDatabase()
             ResonanceDB.ruleOverrides[ruleID] = nil
         end
     end
-    self:InitializeProfiles()
+    self:InitializeProfiles(previousAccountVersion)
     self:InitializeCharacterProfiles()
     if type(ResonanceDB.minimap.hide) ~= "boolean" then ResonanceDB.minimap.hide = DEFAULTS.minimap.hide end
     if type(ResonanceDB.minimap.angle) ~= "number" then ResonanceDB.minimap.angle = DEFAULTS.minimap.angle end
 
-    if ResonanceDB.version ~= DEFAULTS.version then
+    if (tonumber(ResonanceDB.version) or 0) < DEFAULTS.version then
         ResonanceDB.version = DEFAULTS.version
     end
 
@@ -181,7 +347,7 @@ function ns:InitializeDatabase()
     self.CharDB = ResonanceCharDB
 end
 
-function ns:InitializeProfiles()
+function ns:InitializeProfiles(previousVersion)
     local hadLegacy = next(ResonanceDB.ruleOverrides or {}) ~= nil or next(ResonanceDB.ruleSettings or {}) ~= nil
     for specID in pairs(self.SUPPORTED_SPECS) do
         local store = ResonanceDB.specProfiles[specID]
@@ -203,7 +369,7 @@ function ns:InitializeProfiles()
         end
     end
 
-    if ResonanceDB.version and ResonanceDB.version < 3 and hadLegacy then
+    if (tonumber(previousVersion) or 0) < 3 and hadLegacy then
         for ruleID, rule in pairs(self.RuleByID or {}) do
             local legacyEnabled = ResonanceDB.ruleOverrides[ruleID]
             local legacy = ResonanceDB.ruleSettings[ruleID]
@@ -224,20 +390,144 @@ local function DeepCopy(source)
     return copy
 end
 
-local SOUND_ID_REMAP = {
-    [1884443] = 568175, -- encrypted Avenging Wrath revamp take -> verified legacy impact
-}
-
 local function RemapSetSounds(set)
     if type(set) ~= "table" or type(set.rules) ~= "table" then return end
     for _, config in pairs(set.rules) do
         if type(config) == "table" and type(config.layers) == "table" then
             for _, layer in pairs(config.layers) do
-                if type(layer) == "table" and SOUND_ID_REMAP[layer.soundID] then
-                    layer.soundID = SOUND_ID_REMAP[layer.soundID]
+                if type(layer) == "table" and tonumber(layer.soundID) then
+                    layer.soundID = ResolveAlias(SOUND_ID_REMAP, tonumber(layer.soundID))
                 end
             end
         end
+    end
+end
+
+local function NormalizeProfileSet(set, allowNewRuleDefaults)
+    if type(set) ~= "table" then return end
+    if type(set.rules) ~= "table" then set.rules = {} end
+
+    local migratedRules = {}
+    -- Keep an already-current configuration if both old and new IDs exist.
+    for ruleID, config in pairs(set.rules) do
+        if ResolveAlias(RULE_ID_ALIASES, ruleID) == ruleID then
+            migratedRules[ruleID] = config
+        end
+    end
+    for ruleID, config in pairs(set.rules) do
+        local resolved = ResolveAlias(RULE_ID_ALIASES, ruleID)
+        if migratedRules[resolved] == nil then
+            migratedRules[resolved] = config
+        end
+    end
+    set.rules = migratedRules
+
+    for _, config in pairs(set.rules) do
+        if type(config) == "table" and type(config.layers) == "table" then
+            for _, layer in pairs(config.layers) do
+                if type(layer) == "table" and tonumber(layer.soundID) then
+                    local soundID = tonumber(layer.soundID)
+                    layer.soundID = ResolveAlias(SOUND_ID_REMAP, soundID)
+                    local sound = ns.SoundByID and ns.SoundByID[layer.soundID]
+                    if sound then
+                        layer.soundKind = sound.kind or "file"
+                        layer.soundLabel = sound.label
+                        layer.missingSound = nil
+                    else
+                        -- Keep the original choice recoverable, but mark it so
+                        -- runtime playback can fail closed until it is restored
+                        -- or explicitly remapped in a future migration.
+                        layer.soundKind = layer.soundKind or "file"
+                        layer.soundLabel = layer.soundLabel or ("Sound " .. layer.soundID)
+                        layer.missingSound = true
+                    end
+                end
+            end
+        end
+    end
+
+    set.schemaVersion = math.max(tonumber(set.schemaVersion) or 0, ns.PROFILE_SCHEMA_VERSION)
+    set.ruleCatalogVersion = math.max(tonumber(set.ruleCatalogVersion) or 0, ns.RULE_CATALOG_VERSION)
+    set.soundCatalogVersion = math.max(tonumber(set.soundCatalogVersion) or 0, ns.SOUND_CATALOG_VERSION)
+    if set.ruleFallback == nil then
+        set.ruleFallback = allowNewRuleDefaults and "current-defaults" or "disabled"
+    end
+end
+
+local function FreezeProfileSet(set, specID, includeMissingRules)
+    if type(set) ~= "table" then return end
+    if type(set.rules) ~= "table" then set.rules = {} end
+    for _, rule in ipairs(ns.RulesBySpec[specID] or {}) do
+        local existing = set.rules[rule.id]
+        if existing ~= nil or includeMissingRules then
+            local config = type(existing) == "table" and existing or {}
+            set.rules[rule.id] = config
+            if type(config.enabled) ~= "boolean" then
+                config.enabled = set.ruleFallback == "disabled" and false or rule.defaultOn == true
+            end
+            if type(config.layers) ~= "table" then config.layers = {} end
+
+            local layerCount = tonumber(config.layerCount)
+            if not layerCount then
+                layerCount = math.max(2, #(rule.defaultSounds or {}))
+                for index in pairs(config.layers) do
+                    if type(index) == "number" and index > layerCount then layerCount = index end
+                end
+            end
+            layerCount = math.max(2, math.min(ns.MAX_RULE_LAYERS or 8, math.floor(layerCount)))
+            config.layerCount = layerCount
+            for index = 1, layerCount do
+                local layer = config.layers[index]
+                local defaultSound = rule.defaultSounds and rule.defaultSounds[index]
+                local defaultDelay = rule.defaultDelays and tonumber(rule.defaultDelays[index])
+                    or (index == 1 and math.floor((rule.delay or 0) * 1000 + 0.5) or 0)
+                if type(layer) ~= "table" then
+                    layer = {
+                        enabled = defaultSound ~= nil,
+                        soundID = defaultSound or false,
+                        delayMs = defaultDelay,
+                    }
+                    config.layers[index] = layer
+                else
+                    if type(layer.enabled) ~= "boolean" then layer.enabled = defaultSound ~= nil end
+                    if layer.soundID == nil then layer.soundID = defaultSound or false end
+                    if tonumber(layer.delayMs) == nil then layer.delayMs = defaultDelay end
+                end
+            end
+            for index in pairs(config.layers) do
+                if type(index) == "number" and index > layerCount then config.layers[index] = nil end
+            end
+        end
+    end
+    set.ruleFallback = "disabled"
+end
+
+local CHARACTER_STORE_MIGRATIONS = {
+    [4] = function(store, specID)
+        for _, set in pairs(store.savedSets or {}) do
+            if type(set) == "table" and set.builtin ~= true then
+                -- Generated sets already stored explicit toggles. Ambiguous
+                -- sparse legacy entries fail closed instead of inheriting a
+                -- possibly changed default from the new addon release.
+                set.ruleFallback = "disabled"
+                FreezeProfileSet(set, specID, false)
+                NormalizeProfileSet(set, false)
+            end
+        end
+        local loadedSet = store.loadedName and store.savedSets and store.savedSets[store.loadedName]
+        if type(store.working) == "table" and not (loadedSet and loadedSet.builtin == true) then
+            store.working.ruleFallback = "disabled"
+            FreezeProfileSet(store.working, specID, false)
+            NormalizeProfileSet(store.working, false)
+        end
+    end,
+}
+
+local function RunCharacterStoreMigrations(store, specID, previousVersion)
+    previousVersion = math.max(0, math.floor(tonumber(previousVersion) or 0))
+    for version = previousVersion + 1, CHARACTER_DEFAULTS.version do
+        local migrate = CHARACTER_STORE_MIGRATIONS[version]
+        if migrate then migrate(store, specID) end
     end
 end
 
@@ -245,7 +535,13 @@ local PRESET_RANK = { subtle = 1, medium = 2, expressive = 3 }
 
 local function BuildCuratedPreset(specID, presetKey)
     local targetRank = PRESET_RANK[presetKey] or 2
-    local preset = { rules = {}, builtin = true, builtinVersion = ns.BUILTIN_SET_VERSION, preset = presetKey }
+    local preset = {
+        rules = {}, builtin = true, builtinVersion = ns.BUILTIN_SET_VERSION, preset = presetKey,
+        schemaVersion = ns.PROFILE_SCHEMA_VERSION,
+        ruleCatalogVersion = ns.RULE_CATALOG_VERSION,
+        soundCatalogVersion = ns.SOUND_CATALOG_VERSION,
+        ruleFallback = "current-defaults",
+    }
     for _, rule in ipairs(ns.RulesBySpec[specID] or {}) do
         local curated = ns.CuratedRulePresets and ns.CuratedRulePresets[rule.id]
         local curatedPreset = curated and curated[presetKey]
@@ -281,20 +577,28 @@ local function BuildCuratedPreset(specID, presetKey)
 end
 
 function ns:InitializeCharacterProfiles()
-    if type(ResonanceCharDB) ~= "table" then ResonanceCharDB = CopyDefaults(CHARACTER_DEFAULTS) end
+    local previousCharacterVersion
+    if type(ResonanceCharDB) ~= "table" then
+        ResonanceCharDB = CopyDefaults(CHARACTER_DEFAULTS)
+        previousCharacterVersion = CHARACTER_DEFAULTS.version
+    else
+        previousCharacterVersion = tonumber(ResonanceCharDB.version) or 0
+    end
     if type(ResonanceCharDB.specs) ~= "table" then ResonanceCharDB.specs = {} end
     for specID in pairs(self.SUPPORTED_SPECS) do
         local store = ResonanceCharDB.specs[specID]
         local createdStore = type(store) ~= "table"
+        local legacyStore = ResonanceDB.specProfiles and ResonanceDB.specProfiles[specID]
+        local legacyProfile = legacyStore and legacyStore.profiles and legacyStore.profiles[legacyStore.active]
+        local hasLegacyProfile = type(legacyProfile) == "table" and type(legacyProfile.rules) == "table"
+            and next(legacyProfile.rules) ~= nil
         if type(store) ~= "table" then
             store = { working = nil, savedSets = {}, loadedName = nil }
             ResonanceCharDB.specs[specID] = store
         end
         if type(store.savedSets) ~= "table" then store.savedSets = {} end
         if type(store.working) ~= "table" then
-            local legacyStore = ResonanceDB.specProfiles and ResonanceDB.specProfiles[specID]
-            local legacy = legacyStore and legacyStore.profiles and legacyStore.profiles[legacyStore.active]
-            store.working = type(legacy) == "table" and DeepCopy(legacy) or { rules = {} }
+            store.working = hasLegacyProfile and DeepCopy(legacyProfile) or { rules = {} }
         end
         if type(store.working.rules) ~= "table" then store.working.rules = {} end
         RemapSetSounds(store.working)
@@ -305,6 +609,7 @@ function ns:InitializeCharacterProfiles()
                 set.rules = {}
             end
             RemapSetSounds(set)
+            NormalizeProfileSet(set, set.builtin == true)
         end
         local oldBase = store.savedSets["Resonance Base"]
         if type(oldBase) == "table" and oldBase.builtin == true then
@@ -321,16 +626,24 @@ function ns:InitializeCharacterProfiles()
             end
         end
         if createdStore then
-            store.working = DeepCopy(store.savedSets["Resonance Medium"])
-            store.loadedName = "Resonance Medium"
+            if hasLegacyProfile then
+                store.savedSets.Migrated = DeepCopy(store.working)
+                store.loadedName = "Migrated"
+            else
+                store.working = DeepCopy(store.savedSets["Resonance Medium"])
+                store.loadedName = "Resonance Medium"
+            end
         elseif refreshLoadedBuiltin then
             -- Editing any layer clears loadedName, so this only refreshes an
             -- untouched built-in preset and never overwrites custom work.
             store.working = DeepCopy(store.savedSets[refreshLoadedBuiltin])
             store.loadedName = refreshLoadedBuiltin
         end
+        local loadedSet = store.loadedName and store.savedSets[store.loadedName]
+        NormalizeProfileSet(store.working, loadedSet and loadedSet.builtin == true)
+        RunCharacterStoreMigrations(store, specID, previousCharacterVersion)
     end
-    ResonanceCharDB.version = CHARACTER_DEFAULTS.version
+    ResonanceCharDB.version = math.max(previousCharacterVersion, CHARACTER_DEFAULTS.version)
 end
 
 function ns:GetSpecProfileStore(specID)
@@ -356,11 +669,53 @@ function ns:GetRuleConfig(ruleID, create)
     return config
 end
 
+local function CountProfileCompatibility(owner, profile, specID)
+    local report = { missingSounds = 0, retiredRules = 0, newRules = 0 }
+    if not profile or type(profile.rules) ~= "table" then return report end
+    for ruleID, config in pairs(profile.rules) do
+        if not owner.RuleByID[ruleID] then report.retiredRules = report.retiredRules + 1 end
+        if type(config) == "table" and type(config.layers) == "table" then
+            for _, layer in pairs(config.layers) do
+                if type(layer) == "table" and tonumber(layer.soundID)
+                    and not owner.SoundByID[tonumber(layer.soundID)] then
+                    report.missingSounds = report.missingSounds + 1
+                end
+            end
+        end
+    end
+    for _, rule in ipairs(owner.RulesBySpec[specID] or {}) do
+        if profile.rules[rule.id] == nil then report.newRules = report.newRules + 1 end
+    end
+    return report
+end
+
+function ns:GetProfileCompatibility(specID)
+    return CountProfileCompatibility(self, self:GetActiveProfile(specID), specID)
+end
+
+function ns:GetSavedSetsCompatibility(specID)
+    local store = self:GetSpecProfileStore(specID)
+    local total = { missingSounds = 0, retiredRules = 0, newRules = 0, affectedSets = 0 }
+    for _, set in pairs((store and store.savedSets) or {}) do
+        local report = CountProfileCompatibility(self, set, specID)
+        if report.missingSounds > 0 or report.retiredRules > 0 or report.newRules > 0 then
+            total.affectedSets = total.affectedSets + 1
+            total.missingSounds = total.missingSounds + report.missingSounds
+            total.retiredRules = total.retiredRules + report.retiredRules
+            total.newRules = total.newRules + report.newRules
+        end
+    end
+    return total
+end
+
 ns.MAX_RULE_LAYERS = 8
 
 function ns:GetRuleLayerCount(rule)
-    local count = math.max(2, #(rule.defaultSounds or {}))
     local config = self:GetRuleConfig(rule.id, false)
+    if config and tonumber(config.layerCount) then
+        return math.max(2, math.min(self.MAX_RULE_LAYERS, math.floor(tonumber(config.layerCount))))
+    end
+    local count = math.max(2, #(rule.defaultSounds or {}))
     if config and type(config.layers) == "table" then
         for index in pairs(config.layers) do
             if type(index) == "number" and index > count then count = index end
@@ -378,6 +733,8 @@ function ns:GetLayerConfig(rule, index)
     return {
         enabled = layer ~= nil and layer.enabled ~= false or (layer == nil and default ~= nil),
         soundID = soundID,
+        soundLabel = layer and layer.soundLabel,
+        missingSound = layer and layer.missingSound == true,
         delayMs = layer and tonumber(layer.delayMs)
             or (rule.defaultDelays and tonumber(rule.defaultDelays[index]))
             or (index == 1 and math.floor((rule.delay or 0) * 1000 + 0.5) or 0),
@@ -390,22 +747,25 @@ function ns:AddRuleLayer(rule)
     local config = self:GetRuleConfig(rule.id, true)
     config.layers = config.layers or {}
     config.layers[count + 1] = { enabled = false, soundID = false, delayMs = 0 }
+    config.layerCount = count + 1
     local store = self:GetSpecProfileStore(rule.spec)
     if store then store.loadedName = nil end
     return true
 end
 
 function ns:RemoveRuleLayer(rule, index)
-    if index < 3 or index > self:GetRuleLayerCount(rule) then return false end
+    local count = self:GetRuleLayerCount(rule)
+    if index < 3 or index > count then return false end
     local config = self:GetRuleConfig(rule.id, true)
     config.layers = config.layers or {}
-    for fill = 1, self:GetRuleLayerCount(rule) do
+    for fill = 1, count do
         if config.layers[fill] == nil then
             local current = self:GetLayerConfig(rule, fill)
             config.layers[fill] = { enabled = current.enabled, soundID = current.soundID or false, delayMs = current.delayMs or 0 }
         end
     end
     table.remove(config.layers, index)
+    config.layerCount = count - 1
     local store = self:GetSpecProfileStore(rule.spec)
     if store then store.loadedName = nil end
     return true
@@ -416,6 +776,7 @@ function ns:SetLayerConfig(rule, index, values)
     config.layers = config.layers or {}
     local layer = config.layers[index] or {}
     config.layers[index] = layer
+    config.layerCount = math.max(tonumber(config.layerCount) or self:GetRuleLayerCount(rule), index)
     if values.enabled ~= nil then layer.enabled = values.enabled and true or false end
     if values.soundID ~= nil then layer.soundID = tonumber(values.soundID) end
     if values.clearSound then layer.soundID = false end
@@ -431,12 +792,20 @@ function ns:SaveSoundSet(specID, name)
     if store.savedSets[name] and store.savedSets[name].builtin == true then
         return false, "builtin"
     end
-    store.savedSets[name] = DeepCopy(store.working)
+    local snapshot = DeepCopy(store.working)
+    FreezeProfileSet(snapshot, specID, true)
+    NormalizeProfileSet(snapshot, false)
+    store.savedSets[name] = snapshot
     store.savedSets[name].builtin = nil
     store.savedSets[name].builtinVersion = nil
     store.savedSets[name].baseVersion = nil
     store.savedSets[name].preset = nil
+    store.savedSets[name].ruleFallback = "disabled"
+    store.savedSets[name].schemaVersion = self.PROFILE_SCHEMA_VERSION
+    store.savedSets[name].ruleCatalogVersion = self.RULE_CATALOG_VERSION
+    store.savedSets[name].soundCatalogVersion = self.SOUND_CATALOG_VERSION
     store.savedSets[name].savedAt = GetServerTime and GetServerTime() or 0
+    store.working = DeepCopy(store.savedSets[name])
     store.loadedName = name
     self:QueueRefresh("sound set saved")
     return true
@@ -563,6 +932,10 @@ function ns:GetRuleEnabled(rule)
     if override ~= nil then
         return override
     end
+    local profile = self:GetActiveProfile(rule.spec)
+    if profile and profile.ruleFallback == "disabled" then
+        return false
+    end
     return rule.defaultOn
 end
 
@@ -572,7 +945,12 @@ function ns:SetRuleEnabled(ruleID, enabled)
         return
     end
     local config = self:GetRuleConfig(ruleID, true)
-    config.enabled = enabled == rule.defaultOn and nil or (enabled and true or false)
+    local profile = self:GetActiveProfile(rule.spec)
+    if profile and profile.ruleFallback == "disabled" then
+        config.enabled = enabled and true or false
+    else
+        config.enabled = enabled == rule.defaultOn and nil or (enabled and true or false)
+    end
     local store = self:GetSpecProfileStore(rule.spec)
     if store then store.loadedName = nil end
     self:QueueRefresh("rule")

@@ -36,7 +36,7 @@ local rules = {
       defaultSounds={4613005,568047}, defaultDelays={0,70}, description="A committed Comet Storm release; individual comets remain silent." },
     { id="frost_blizzard_12_1", spec=64, spell="Blizzard", moment="Cast", event="SUCCEEDED", spellIDs={190356}, preset="expressive", cooldown=1.2, defaultOn=false,
       defaultSounds={4612975}, defaultDelays={0}, description="Optional AoE hard-cast accent." },
-    { id="frost_hand_of_frost_12_1", spec=64, spell="Hand of Frost (Apex)", moment="Ready", event="AURA", auraIDs={1263249}, capability="handOfFrost", preset="subtle", cooldown=5, defaultOn=true,
+    { id="frost_hand_of_frost_12_1", spec=64, spell="Hand of Frost (Apex)", moment="Ready", event="AURA", auraIDs={1262935,1262981,1263249,1263263}, capability="handOfFrost", preset="subtle", cooldown=5, defaultOn=true,
       defaultSounds={4612975,5259954}, defaultDelays={0,90}, description="Apex: one cue when Hand of Frost becomes active." },
     { id="frost_brain_freeze_12_1", spec=64, spell="Brain Freeze", moment="Ready", event="AURA", auraIDs={190447}, preset="expressive", cooldown=1.2, defaultOn=false,
       defaultSounds={5259954}, defaultDelays={0}, description="Current 12.1 Brain Freeze proc ID; disabled by default because it can be frequent." },

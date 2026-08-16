@@ -175,6 +175,7 @@ end
 
 function ns:GetApexLabel(specID)
     local apex = self.ApexBySpec and self.ApexBySpec[specID]
+    if not apex then return "Not catalogued" end
     if apex and self:HasCapability(apex.capability) then return apex.label end
     return "Not detected"
 end

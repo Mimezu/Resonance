@@ -1,4 +1,4 @@
-# Resonance 1.5.0
+# Resonance 1.9.0
 
 Resonance adds configurable, event-driven spell ambience to every Retail specialization while leaving Blizzard's original spell audio untouched.
 
@@ -15,6 +15,8 @@ Resonance adds configurable, event-driven spell ambience to every Retail special
 - A floating sound picker organizes assets by texture, including Physical, Poison & Toxin, and Metal & Machines alongside the magical families.
 - Search scans labels and provenance across the complete library, so boss, raid, dungeon, class, and spell names remain easy to find as the catalog grows.
 - Sound sets are saved per character and specialization. Every spec receives protected, hand-curated `Resonance Subtle`, `Resonance Medium`, and `Resonance Expressive` presets with distinct sound choices, delays, layers, and enabled moments; personal sets can still be created, loaded, overwritten, or deleted.
+- Personal sets carry explicit schema, rule-catalog and sound-catalog versions. Stable rule IDs and numeric FileDataIDs survive category/label changes; ordered aliases and remaps adapt retired identifiers, missing sounds are preserved but fail closed, and new rules stay disabled in older personal mixes until chosen.
+- The developer-facing migration rules are documented in `COMPATIBILITY.md` so future releases keep this guarantee instead of relying on convention.
 - Presets change the actual enabled moments. There is no global density filter, priority threshold, or sound budget silently suppressing an explicitly enabled spell.
 - The compact editor uses real specialization icons, builds only the selected spec's controls, and places every moment for a spell horizontally on one card.
 - Resonance windows use slim purple/teal scrollbars with wheel, track-click, and drag support instead of Blizzard's large arrow controls.

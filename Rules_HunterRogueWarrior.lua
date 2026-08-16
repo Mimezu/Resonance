@@ -18,9 +18,9 @@ local capabilityGroups = {
 
     raptorSwipe = { 1259003, 1259017, 1259019 },
     implacable = { 1265385, 1265386, 1265387 },
-    gravedigger = { 1265861, 1265862, 1265863 },
+    gravedigger = { 1265861, 1265862, 1265863, 1265935 },
     ancientArts = { 1268932, 1268936, 1268939 },
-    masterOfWarfare = { 1269306, 1269307, 1269314, 1269394 },
+    masterOfWarfare = { 1269306, 1269307, 1269314, 1269383, 1269394 },
     rampagingBerserker = { 1269308, 1269309, 1269310 },
     phalanx = { 1269311, 1269312, 1269313 },
     deadlyInsight = { 1277136 }, -- Marksmanship's player buff

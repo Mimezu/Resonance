@@ -12,6 +12,16 @@ function ns:PrintAudit()
     self:Print("Apex: " .. (specID and self:GetApexLabel(specID) or "Not detected"))
     local _, soundSet = self:GetActiveProfile(specID)
     self:Print("Active moments: " .. tostring(#(self.Runtime.activeRules or {})) .. " • Sound set: " .. (soundSet or "Unsaved working set"))
+    if specID then
+        local compatibility = self:GetProfileCompatibility(specID)
+        self:Print(string.format("Compatibility: %d missing sounds • %d retired rules • %d new rules disabled",
+            compatibility.missingSounds, compatibility.retiredRules, compatibility.newRules))
+        local saved = self:GetSavedSetsCompatibility(specID)
+        if saved.affectedSets > 0 then
+            self:Print(string.format("Saved sets: %d affected • %d missing sounds • %d retired rules • %d new rules disabled",
+                saved.affectedSets, saved.missingSounds, saved.retiredRules, saved.newRules))
+        end
+    end
 end
 
 function ns:HandleCommand(message)

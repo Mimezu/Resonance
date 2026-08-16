@@ -61,7 +61,7 @@ function ns:ResolveRuleSounds(rule)
     local sounds = {}
     for index = 1, self:GetRuleLayerCount(rule) do
         local layer = self:GetLayerConfig(rule, index)
-        if layer.enabled and type(layer.soundID) == "number" then
+        if layer.enabled and type(layer.soundID) == "number" and self.SoundByID[layer.soundID] then
             sounds[#sounds + 1] = {
                 id = layer.soundID,
                 key = self:GetSoundLabel(layer.soundID),
