@@ -122,10 +122,16 @@ function ns:ScanCapabilities()
                                             if self:IsSafeTable(definitionInfo) then
                                                 local overriddenSpellID = definitionInfo.overriddenSpellID
                                                 local spellID = definitionInfo.spellID
+                                                -- Replacement talents can expose a passive/base
+                                                -- spell on the selected node and a separate active
+                                                -- override in the spellbook. Both identities belong
+                                                -- to the purchased talent and must be retained for
+                                                -- capability gates such as Apex detection.
+                                                if self:IsSafeValue(spellID) and type(spellID) == "number" then
+                                                    MarkSpell(capabilities, spellID, rank)
+                                                end
                                                 if self:IsSafeValue(overriddenSpellID) and type(overriddenSpellID) == "number" then
                                                     MarkSpell(capabilities, overriddenSpellID, rank)
-                                                elseif self:IsSafeValue(spellID) and type(spellID) == "number" then
-                                                    MarkSpell(capabilities, spellID, rank)
                                                 end
                                             end
                                         end
@@ -170,5 +176,5 @@ end
 function ns:GetApexLabel(specID)
     local apex = self.ApexBySpec and self.ApexBySpec[specID]
     if apex and self:HasCapability(apex.capability) then return apex.label end
-    return "Not selected or not detected"
+    return "Not detected"
 end

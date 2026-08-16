@@ -10,7 +10,9 @@ ns.CapabilityGroups = {
     prismaticBolt = { 1295923, 1295944, 1295946 },
     handOfFrost = { 1262935, 1262981, 1263249, 1263263 },
     risingFury = { 1271687, 1271783, 1271788, 1271796 },
-    merithrasBlessing = { 1256581, 1256579 },
+    -- 1256577 is the selected passive talent; 1256579/1256581 are
+    -- its resulting active/replacement spell variants.
+    merithrasBlessing = { 1256577, 1256579, 1256581 },
     pal_lightsmith = { 431377, 431380, 431381, 431460, 431522, 431581, 1289728, 1289890, 1289892 },
     pal_templar = { 427441, 1217116, 1246643 },
     dk_deathbringer = { 434765, 448473 },

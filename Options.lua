@@ -1035,7 +1035,7 @@ function ns:RefreshOptions()
         local apex = specID and self:GetApexLabel(specID) or "Not detected"
         local active = #(self.Runtime.activeRules or {})
         self.StatusText:SetText(string.format(
-            "|cffffffff%s|r\n|cff9d7cff%s|r  •  %s\n|cff35d1bd%d active sound rules|r",
+            "|cffffffff%s|r\n|cff9d7cff%s|r  •  Apex: %s\n|cff35d1bd%d active sound rules|r",
             specName, hero, apex, active
         ))
     end
