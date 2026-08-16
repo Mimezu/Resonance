@@ -1168,10 +1168,8 @@ function ns:CreateSoundSetWindow()
     window:SetSize(500, 510); window:SetPoint("CENTER"); window:SetFrameStrata("TOOLTIP"); window:SetFrameLevel(920)
     window:SetToplevel(true); window:SetMovable(true); window:SetClampedToScreen(true); window:EnableMouse(true)
     ApplyBackdrop(window, COLORS.panel, COLORS.accent)
-    local close = CreateButton(window, "×", 26, function() window:Hide() end)
-    close:SetHeight(26); close:SetPoint("TOPRIGHT", -8, -8)
-    close:GetFontString():SetTextColor(unpack(COLORS.teal))
-    AddTooltip(close, "Close", "Close without creating, loading, or overwriting a sound set.")
+    local close = CreateCloseButton(window)
+    close:SetPoint("TOPRIGHT", -8, -8)
     local title = CreateText(window, "GameFontNormalLarge", "Sound sets"); title:SetPoint("TOPLEFT", 18, -16)
     local subtitle = CreateText(window, "GameFontHighlightSmall", "Saved only for this character and specialization.")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4); subtitle:SetTextColor(unpack(COLORS.muted))
@@ -1180,15 +1178,34 @@ function ns:CreateSoundSetWindow()
     drag:SetScript("OnDragStart", function() window:StartMoving() end); drag:SetScript("OnDragStop", function() window:StopMovingOrSizing() end)
     window.empty = CreateText(window, "GameFontHighlight", "No saved sets yet. Create one from your current sounds.")
     window.empty:SetPoint("CENTER", 0, 20); window.empty:SetTextColor(unpack(COLORS.muted))
+    local setScroll=CreateFrame("ScrollFrame",nil,window)
+    setScroll:SetPoint("TOPLEFT",18,-66); setScroll:SetPoint("BOTTOMRIGHT",-34,58)
+    local setContent=CreateFrame("Frame",nil,setScroll)
+    setContent:SetWidth(448); setContent:SetHeight(386); setScroll:SetScrollChild(setContent)
+    SkinScrollFrame(setScroll)
     window.rows = {}
-    for index=1,10 do
-        local row=CreateFrame("Frame",nil,window,"BackdropTemplate"); row:SetSize(464,34); row:SetPoint("TOPLEFT",18,-66-(index-1)*39)
+    function window:AcquireSetRow(index)
+        if self.rows[index] then return self.rows[index] end
+        local row=CreateFrame("Frame",nil,setContent,"BackdropTemplate")
+        row:SetHeight(34); row:SetPoint("TOPLEFT",0,-(index-1)*39); row:SetPoint("TOPRIGHT",0,-(index-1)*39)
         ApplyBackdrop(row,COLORS.cardAlt,{0.16,0.17,0.24,1})
         row.name=CreateText(row,"GameFontNormal",""); row.name:SetPoint("LEFT",10,0)
-        row.load=CreateButton(row,"Load",62,function() ns:LoadSoundSet(window.specID,row.setName); ns:RefreshOptions(); window:Refresh() end,true); row.load:SetPoint("RIGHT",-145,0)
-        row.overwrite=CreateButton(row,"Overwrite",78,function() ns:SaveSoundSet(window.specID,row.setName); window:Refresh(); ns:RefreshOptions() end); row.overwrite:SetPoint("LEFT",row.load,"RIGHT",6,0)
-        row.delete=CreateButton(row,"×",28,function() ns:DeleteSoundSet(window.specID,row.setName); window:Refresh(); ns:RefreshOptions() end); row.delete:SetPoint("LEFT",row.overwrite,"RIGHT",6,0)
-        window.rows[index]=row
+        row.export=CreateButton(row,"Export",54,function()
+            local exportText, reason = ns:ExportSoundSet(window.specID, row.setName)
+            if exportText then window.transfer:OpenExport(row.setName, exportText)
+            else ns:Print("Could not export this sound set (" .. tostring(reason or "unknown error") .. ").") end
+        end)
+        row.export:SetPoint("RIGHT",-8,0)
+        row.delete=CreateButton(row,"×",28,function() ns:DeleteSoundSet(window.specID,row.setName); window:Refresh(); ns:RefreshOptions() end)
+        row.delete:SetPoint("RIGHT",row.export,"LEFT",-6,0)
+        row.overwrite=CreateButton(row,"Overwrite",78,function() ns:SaveSoundSet(window.specID,row.setName); window:Refresh(); ns:RefreshOptions() end)
+        row.overwrite:SetPoint("RIGHT",row.delete,"LEFT",-6,0)
+        row.load=CreateButton(row,"Load",62,function() ns:LoadSoundSet(window.specID,row.setName); ns:RefreshOptions(); window:Refresh() end,true)
+        row.load:SetPoint("RIGHT",row.overwrite,"LEFT",-6,0)
+        row.name:SetPoint("RIGHT", row.load, "LEFT", -8, 0)
+        row.name:SetJustifyH("LEFT"); row.name:SetWordWrap(false)
+        self.rows[index]=row
+        return row
     end
     local namePanel=CreateFrame("Frame",nil,window,"BackdropTemplate")
     namePanel:SetSize(360,132); namePanel:SetPoint("CENTER"); namePanel:SetFrameLevel(window:GetFrameLevel()+20)
@@ -1217,27 +1234,108 @@ function ns:CreateSoundSetWindow()
     nameBox:SetScript("OnEnterPressed",CommitNewSoundSet)
     nameBox:SetScript("OnEscapePressed",function(self) self:ClearFocus(); namePanel:Hide() end)
     namePanel:Hide(); window.namePanel=namePanel
+
+    local transfer=CreateFrame("Frame",nil,window,"BackdropTemplate")
+    transfer:SetSize(450,310); transfer:SetPoint("CENTER"); transfer:SetFrameLevel(window:GetFrameLevel()+30)
+    transfer:EnableMouse(true); ApplyBackdrop(transfer,COLORS.panel,COLORS.accent)
+    local transferClose=CreateCloseButton(transfer)
+    transferClose:SetPoint("TOPRIGHT",-8,-8)
+    transfer.title=CreateText(transfer,"GameFontNormalLarge","")
+    transfer.title:SetPoint("TOPLEFT",16,-14)
+    transfer.help=CreateText(transfer,"GameFontHighlightSmall","")
+    transfer.help:SetPoint("TOPLEFT",transfer.title,"BOTTOMLEFT",0,-4)
+    transfer.help:SetPoint("RIGHT",transfer,"RIGHT",-42,0)
+    transfer.help:SetJustifyH("LEFT"); transfer.help:SetTextColor(unpack(COLORS.muted))
+
+    local textScroll=CreateFrame("ScrollFrame",nil,transfer,"BackdropTemplate")
+    textScroll:SetPoint("TOPLEFT",16,-72); textScroll:SetPoint("BOTTOMRIGHT",-16,60)
+    textScroll:EnableMouseWheel(true); ApplyBackdrop(textScroll,COLORS.cardAlt,COLORS.border)
+    local textBox=CreateFrame("EditBox",nil,textScroll)
+    textBox:SetMultiLine(true); textBox:SetAutoFocus(false); textBox:SetFontObject("GameFontHighlightSmall")
+    textBox:SetWidth(400); textBox:SetHeight(170); textBox:SetTextInsets(8,8,8,8)
+    textBox:SetMaxLetters(100000); textScroll:SetScrollChild(textBox)
+    textBox:SetScript("OnTextChanged",function(self)
+        local textHeight = tonumber(self.GetStringHeight and self:GetStringHeight()) or 150
+        self:SetHeight(math.max(170, textHeight + 20))
+        textScroll:UpdateScrollChildRect()
+    end)
+    textBox:SetScript("OnEscapePressed",function(self) self:ClearFocus(); transfer:Hide() end)
+    textScroll:SetScript("OnMouseWheel",function(self,delta)
+        local maximum = self.GetVerticalScrollRange and self:GetVerticalScrollRange() or 0
+        self:SetVerticalScroll(math.max(0,math.min(maximum,(self:GetVerticalScroll() or 0)-delta*36)))
+    end)
+
+    transfer.status=CreateText(transfer,"GameFontHighlightSmall","")
+    transfer.status:SetPoint("BOTTOMLEFT",16,18); transfer.status:SetPoint("RIGHT",transfer,"RIGHT",-210,0)
+    transfer.status:SetJustifyH("LEFT"); transfer.status:SetTextColor(unpack(COLORS.muted))
+    transfer.cancel=CreateButton(transfer,"Cancel",80,function() transfer:Hide() end)
+    transfer.cancel:SetPoint("BOTTOMRIGHT",-16,14)
+    transfer.action=CreateButton(transfer,"",110,function() end,true)
+    transfer.action:SetPoint("RIGHT",transfer.cancel,"LEFT",-8,0)
+
+    function transfer:OpenExport(setName,exportText)
+        self.mode="export"; self.title:SetText("Export “"..setName.."”")
+        self.help:SetText("Copy this complete Resonance code and send it to a friend. It contains this specialization’s sounds, layers, delays, and toggles.")
+        self.status:SetText("Ctrl+C copies the selected code.")
+        self.status:SetTextColor(unpack(COLORS.muted))
+        self.action:SetText("Select all")
+        self.action:SetScript("OnClick",function() textBox:SetFocus(); textBox:HighlightText() end)
+        self:Show(); self:Raise()
+        textBox:SetText(exportText); textScroll:SetVerticalScroll(0); textBox:SetFocus(); textBox:HighlightText()
+    end
+
+    function transfer:OpenImport()
+        self.mode="import"; self.title:SetText("Import new sound set")
+        self.help:SetText("Paste a complete Resonance export code. It must belong to the specialization currently shown in this window.")
+        self.status:SetText("")
+        self.status:SetTextColor(unpack(COLORS.muted))
+        self.action:SetText("Import")
+        self.action:SetScript("OnClick",function()
+            local importedName, reason, sourceSpecID = ns:ImportSoundSet(window.specID,textBox:GetText())
+            if importedName then
+                ns:Print("Imported sound set: "..importedName)
+                transfer:Hide(); window:Refresh(); ns:RefreshOptions()
+            elseif reason == "wrong-spec" then
+                local sourceName = ns.SUPPORTED_SPECS[sourceSpecID] or ("specialization "..tostring(sourceSpecID or "?"))
+                transfer.status:SetText("This code belongs to "..sourceName..". Select that spec first.")
+                transfer.status:SetTextColor(1,0.35,0.35,1)
+            elseif reason == "checksum" then
+                transfer.status:SetText("Invalid or incomplete code. Copy the entire export again.")
+                transfer.status:SetTextColor(1,0.35,0.35,1)
+            else
+                transfer.status:SetText("This is not a valid Resonance sound-set code.")
+                transfer.status:SetTextColor(1,0.35,0.35,1)
+            end
+        end)
+        self:Show(); self:Raise()
+        textBox:SetText(""); textScroll:SetVerticalScroll(0); textBox:SetFocus()
+    end
+    transfer:SetScript("OnHide",function() textBox:ClearFocus() end)
+    transfer:Hide(); window.transfer=transfer
+
     window.create=CreateButton(window,"Create new set",138,function()
         nameBox:SetText(""); namePanel:Show(); namePanel:Raise(); nameBox:SetFocus()
     end,true)
     window.create:SetPoint("BOTTOMLEFT",18,16)
+    window.import=CreateButton(window,"Import new set",138,function() transfer:OpenImport() end)
+    window.import:SetPoint("LEFT",window.create,"RIGHT",8,0)
     function window:Refresh()
         local names=ns:GetSoundSetNames(self.specID); self.empty:SetShown(#names==0)
         local store=ns:GetSpecProfileStore(self.specID)
-        for index,row in ipairs(self.rows) do
-            local name=names[index]; row.setName=name
-            if name then
-                local builtin = store.savedSets[name] and store.savedSets[name].builtin == true
-                row.name:SetText((store.loadedName==name and "|cff35d1bd" or "|cff9d7cff")..name..(builtin and "  |cff747887Built-in|r" or "|r"))
-                row.overwrite:SetShown(not builtin)
-                row.delete:SetShown(not builtin)
-                row:Show()
-            else
-                row:Hide()
-            end
+        for index,name in ipairs(names) do
+            local row=self:AcquireSetRow(index); row.setName=name
+            local builtin = store.savedSets[name] and store.savedSets[name].builtin == true
+            row.name:SetText((store.loadedName==name and "|cff35d1bd" or "|cff9d7cff")..name..(builtin and "  |cff747887Built-in|r" or "|r"))
+            row.overwrite:SetShown(not builtin)
+            row.delete:SetShown(not builtin)
+            row:Show()
         end
+        for index=#names+1,#self.rows do self.rows[index]:Hide() end
+        setContent:SetHeight(math.max(setScroll:GetHeight(),#names*39))
+        setScroll:UpdateScrollChildRect()
+        if setScroll._resonanceUpdateScrollBar then setScroll._resonanceUpdateScrollBar() end
     end
-    window:SetScript("OnHide",function() namePanel:Hide(); nameBox:ClearFocus() end)
+    window:SetScript("OnHide",function() namePanel:Hide(); transfer:Hide(); nameBox:ClearFocus() end)
     window:Hide(); self.SoundSetWindow=window
     if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]=window:GetName() end
 end

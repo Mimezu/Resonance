@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "1.9.1"
+ns.VERSION = "1.10.0"
 ns.COLOR = "|cff9d7cff"
 ns.SPEC_ORDER = {
     71, 72, 73,       -- Warrior
@@ -60,10 +60,10 @@ ns.SUPPORTED_SPECS = {
     [1468] = "Preservation Evoker",
     [1473] = "Augmentation Evoker",
 }
-ns.BUILTIN_SET_VERSION = 4
+ns.BUILTIN_SET_VERSION = 5
 ns.PROFILE_SCHEMA_VERSION = 1
 ns.RULE_CATALOG_VERSION = 1
-ns.SOUND_CATALOG_VERSION = 1
+ns.SOUND_CATALOG_VERSION = 2
 ns.CURATED_PRESETS = {
     { key = "subtle", name = "Resonance Subtle" },
     { key = "medium", name = "Resonance Medium" },
@@ -267,6 +267,27 @@ local function NormalizeAccountSoundReferences(database)
             -- sound to its canonical category instead of hiding it.
             database.legacyCategoryDraft[soundID] = categoryID
             database.categoryDraft[soundID] = nil
+        end
+    end
+
+    -- Once a user draft has been canonized in the shipped catalog, retire its
+    -- staging records automatically. Removed sounds likewise leave no stale
+    -- red/deletion state behind after the next reload.
+    for soundID, categoryID in pairs(database.categoryDraft) do
+        local sound = ns.SoundByID and ns.SoundByID[tonumber(soundID)]
+        if not sound or categoryID == sound.category then database.categoryDraft[soundID] = nil end
+    end
+    for soundID in pairs(database.deleteDraft) do
+        if not (ns.SoundByID and ns.SoundByID[tonumber(soundID)]) then database.deleteDraft[soundID] = nil end
+    end
+    local export = database.categoryExport
+    if type(export) == "table" then
+        for soundID, categoryID in pairs(export.moves or {}) do
+            local sound = ns.SoundByID and ns.SoundByID[tonumber(soundID)]
+            if not sound or categoryID == sound.category then export.moves[soundID] = nil end
+        end
+        for soundID in pairs(export.deletions or {}) do
+            if not (ns.SoundByID and ns.SoundByID[tonumber(soundID)]) then export.deletions[soundID] = nil end
         end
     end
 end
@@ -846,6 +867,214 @@ function ns:GetSoundSetNames(specID)
         return left < right
     end)
     return names
+end
+
+local function TransferEncode(value)
+    return (tostring(value or ""):gsub("([^%w%-%._])", function(character)
+        return string.format("%%%02X", string.byte(character))
+    end))
+end
+
+local function TransferDecode(value)
+    if type(value) ~= "string" then return nil end
+    local searchFrom = 1
+    while true do
+        local percent = value:find("%", searchFrom, true)
+        if not percent then break end
+        if not value:sub(percent + 1, percent + 2):match("^%x%x$") then return nil end
+        searchFrom = percent + 3
+    end
+    return (value:gsub("%%(%x%x)", function(hex)
+        return string.char(tonumber(hex, 16))
+    end))
+end
+
+local function TransferSplit(value, delimiter, maximum)
+    local parts, startAt = {}, 1
+    while true do
+        if maximum and #parts >= maximum then return nil end
+        local found = value:find(delimiter, startAt, true)
+        if not found then
+            parts[#parts + 1] = value:sub(startAt)
+            return parts
+        end
+        parts[#parts + 1] = value:sub(startAt, found - 1)
+        startAt = found + #delimiter
+    end
+end
+
+local function TransferChecksum(value)
+    local first, second = 1, 0
+    for index = 1, #value do
+        first = (first + string.byte(value, index)) % 65521
+        second = (second + first) % 65521
+    end
+    return string.format("%04X%04X", second, first)
+end
+
+local function TransferBoolean(value)
+    if value == "1" then return true end
+    if value == "0" then return false end
+    return nil
+end
+
+function ns:ExportSoundSet(specID, name)
+    local store = self:GetSpecProfileStore(specID)
+    local source = store and store.savedSets and store.savedSets[name]
+    if type(source) ~= "table" then return nil, "missing-set" end
+
+    local snapshot = DeepCopy(source)
+    FreezeProfileSet(snapshot, specID, true)
+    NormalizeProfileSet(snapshot, source.builtin == true)
+
+    local ruleIDs = {}
+    for ruleID, config in pairs(snapshot.rules or {}) do
+        if type(ruleID) == "string" and type(config) == "table" then
+            ruleIDs[#ruleIDs + 1] = ruleID
+        end
+    end
+    table.sort(ruleIDs)
+
+    local encodedRules = {}
+    for _, ruleID in ipairs(ruleIDs) do
+        local config = snapshot.rules[ruleID]
+        local count = math.max(2, math.min(self.MAX_RULE_LAYERS or 8, math.floor(tonumber(config.layerCount) or 2)))
+        local fields = { TransferEncode(ruleID), config.enabled == true and "1" or "0", tostring(count) }
+        for index = 1, count do
+            local layer = type(config.layers) == "table" and config.layers[index] or nil
+            local soundID = layer and tonumber(layer.soundID) or nil
+            local sound = soundID and self.SoundByID and self.SoundByID[soundID]
+            local kind = (layer and layer.soundKind) or (sound and sound.kind) or "file"
+            local label = (layer and layer.soundLabel) or (sound and sound.label) or ""
+            fields[#fields + 1] = table.concat({
+                layer and layer.enabled == true and "1" or "0",
+                tostring(soundID and math.floor(soundID) or 0),
+                tostring(math.max(0, math.min(5000, math.floor(layer and tonumber(layer.delayMs) or 0)))),
+                kind == "kit" and "k" or "f",
+                TransferEncode(label),
+            }, ",")
+        end
+        encodedRules[#encodedRules + 1] = table.concat(fields, "~")
+    end
+
+    local body = table.concat({
+        tostring(math.floor(tonumber(specID) or 0)),
+        tostring(math.floor(tonumber(snapshot.schemaVersion) or self.PROFILE_SCHEMA_VERSION)),
+        tostring(math.floor(tonumber(snapshot.ruleCatalogVersion) or self.RULE_CATALOG_VERSION)),
+        tostring(math.floor(tonumber(snapshot.soundCatalogVersion) or self.SOUND_CATALOG_VERSION)),
+        TransferEncode(name),
+        table.concat(encodedRules, ";"),
+    }, "|")
+    return "RES1:" .. TransferChecksum(body) .. ":" .. body
+end
+
+function ns:ImportSoundSet(targetSpecID, exportText)
+    if type(exportText) ~= "string" then return nil, "invalid" end
+    exportText = exportText:match("^%s*(.-)%s*$") or ""
+    if #exportText == 0 or #exportText > 100000 then return nil, "invalid" end
+
+    local checksum, body = exportText:match("^RES1:([%x]+):(.*)$")
+    if not checksum or not body or string.upper(checksum) ~= TransferChecksum(body) then
+        return nil, "checksum"
+    end
+
+    local encodedSpec, schemaVersion, ruleCatalogVersion, soundCatalogVersion, encodedName, payload =
+        body:match("^(%d+)|(%d+)|(%d+)|(%d+)|([^|]*)|(.*)$")
+    if not encodedSpec or not schemaVersion or not ruleCatalogVersion or not soundCatalogVersion
+        or encodedName == nil or payload == nil then return nil, "invalid" end
+    local sourceSpecID = tonumber(encodedSpec)
+    targetSpecID = tonumber(targetSpecID)
+    if not sourceSpecID or sourceSpecID ~= targetSpecID then
+        return nil, "wrong-spec", sourceSpecID
+    end
+    local schemaNumber = tonumber(schemaVersion)
+    local ruleCatalogNumber = tonumber(ruleCatalogVersion)
+    local soundCatalogNumber = tonumber(soundCatalogVersion)
+    if not schemaNumber or schemaNumber < 0 or schemaNumber > 1000000
+        or not ruleCatalogNumber or ruleCatalogNumber < 0 or ruleCatalogNumber > 1000000
+        or not soundCatalogNumber or soundCatalogNumber < 0 or soundCatalogNumber > 1000000 then
+        return nil, "invalid"
+    end
+
+    local name = TransferDecode(encodedName)
+    if not name then return nil, "invalid" end
+    name = name:match("^%s*(.-)%s*$") or ""
+    if name == "" then name = "Imported set" end
+    name = name:sub(1, 32)
+
+    local imported = {
+        rules = {},
+        schemaVersion = math.floor(schemaNumber),
+        ruleCatalogVersion = math.floor(ruleCatalogNumber),
+        soundCatalogVersion = math.floor(soundCatalogNumber),
+        ruleFallback = "disabled",
+    }
+
+    local ruleCount = 0
+    for encodedRule in payload:gmatch("([^;]+)") do
+        ruleCount = ruleCount + 1
+        if ruleCount > 500 then return nil, "invalid" end
+        local parts = TransferSplit(encodedRule, "~", (self.MAX_RULE_LAYERS or 8) + 4)
+        if not parts then return nil, "invalid" end
+        local ruleID = TransferDecode(parts[1])
+        local enabled = TransferBoolean(parts[2])
+        local layerCount = tonumber(parts[3])
+        if not ruleID or ruleID == "" or #ruleID > 128 or enabled == nil or not layerCount then
+            return nil, "invalid"
+        end
+        layerCount = math.floor(layerCount)
+        if layerCount < 2 or layerCount > (self.MAX_RULE_LAYERS or 8) or #parts ~= layerCount + 3 then
+            return nil, "invalid"
+        end
+
+        local config = { enabled = enabled, layerCount = layerCount, layers = {} }
+        for index = 1, layerCount do
+            local layerEnabled, soundIDText, delayText, kindText, encodedLabel =
+                parts[index + 3]:match("^([01]),(%d+),(%d+),([fk]),(.*)$")
+            local layerState = TransferBoolean(layerEnabled)
+            local soundID = tonumber(soundIDText)
+            local delayMs = tonumber(delayText)
+            local label = TransferDecode(encodedLabel)
+            if layerState == nil or not soundID or soundID < 0 or soundID > 2147483647
+                or not delayMs or delayMs < 0 or delayMs > 5000 or label == nil then
+                return nil, "invalid"
+            end
+            config.layers[index] = {
+                enabled = layerState,
+                soundID = soundID > 0 and math.floor(soundID) or false,
+                delayMs = math.floor(delayMs),
+                soundKind = kindText == "k" and "kit" or "file",
+                soundLabel = label ~= "" and label or nil,
+            }
+        end
+        imported.rules[ruleID] = config
+    end
+    if ruleCount == 0 then return nil, "invalid" end
+
+    FreezeProfileSet(imported, targetSpecID, true)
+    NormalizeProfileSet(imported, false)
+    imported.builtin = nil
+    imported.builtinVersion = nil
+    imported.preset = nil
+    imported.savedAt = GetServerTime and GetServerTime() or 0
+
+    local store = self:GetSpecProfileStore(targetSpecID)
+    if not store then return nil, "invalid" end
+    local importedName = name
+    if store.savedSets[importedName] ~= nil then
+        local suffixText = " (Imported)"
+        importedName = name:sub(1, 32 - #suffixText) .. suffixText
+        local suffix = 2
+        while store.savedSets[importedName] ~= nil and suffix < 100 do
+            suffixText = " (Imported " .. suffix .. ")"
+            importedName = name:sub(1, 32 - #suffixText) .. suffixText
+            suffix = suffix + 1
+        end
+        if store.savedSets[importedName] ~= nil then return nil, "name-conflict" end
+    end
+    store.savedSets[importedName] = imported
+    self:QueueRefresh("sound set imported")
+    return importedName
 end
 
 function ns:ResetDatabase()

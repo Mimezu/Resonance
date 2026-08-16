@@ -111,15 +111,15 @@ add("holy_benediction",         "",    {5207969, 0}, {5259954, 100})
 
 -- Shadow Priest: dense void pressure with short, dry accents.  DoTs and Mind
 -- Blast are held for Expressive so the rotation retains space.
-add("shadow_voidform",          "sme", {1717716, 0}, {5342340, 85}, {568889, 150})
-add("shadow_void_torrent",      "sme", {568751, 0}, {568889, 100})
+add("shadow_voidform",          "sme", {1717716, 0}, {5342340, 85}, {6982611, 150})
+add("shadow_void_torrent",      "sme", {568751, 0}, {1716507, 100})
 add("shadow_tentacle_slam",     "me",  {5342340, 0}, {568184, 70})
 add("shadow_void_blast",        "me",  {1714480, 0}, {5342340, 70})
 add("shadow_archon_halo",       "sme", {567985, 0}, {5342340, 105})
 add("shadow_vampiric_touch",    "me",  {568984, 0})
 add("shadow_shadow_word_pain",  "e",   {568040, 0})
 add("shadow_shadow_word_madness", "me", {568184, 0}, {5342340, 65})
-add("shadow_void_volley",       "me",  {5342340, 0}, {568889, 80})
+add("shadow_void_volley",       "me",  {5342340, 0}, {6995073, 80})
 add("shadow_mind_blast",        "e",   {1714480, 0})
 add("shadow_shadow_word_death", "me",  {568184, 0}, {5342340, 65})
 add("shadow_shadowfiend",       "sme", {568751, 0}, {5342340, 95})

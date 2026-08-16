@@ -148,7 +148,6 @@ local catalog = {
     { id=5342340, category="void", label="Old God pulse I", detail="Void old-god accent" },
     { id=5342344, category="void", label="Old God pulse II", detail="Void old-god accent" },
     { id=568751, category="void", label="Illidan — Shadow Blast", detail="Black Temple · Burning Crusade" },
-    { id=568889, category="void", label="Kil'jaeden — Shadow Spike", detail="Sunwell Plateau · Burning Crusade" },
     { id=568281, category="fel", label="Felflame I", detail="Felflame impact" },
     { id=568718, category="fel", label="Felflame II", detail="Felflame impact" },
     { id=568902, category="fel", label="Fel fire I", detail="Fel-fire impact" },
@@ -894,7 +893,7 @@ local noveltyCatalog = {
     { id=5013952, category="novelty", label="Infinite Annihilation", detail="Dawn of the Infinite · signature cast" },
     { id=5221582, category="novelty", label="Tyr — Titanic Blow", detail="Dawn of the Infinite · signature attack" },
     { id=5103934, category="novelty", label="Tyr — Dividing Strike", detail="Dawn of the Infinite · signature attack" },
-    { id=4550961, category="novelty", label="Cataclysmic cave break", detail="Dawn of the Infinite · large environmental impact" },
+    { id=4550961, category="earth", label="Cataclysmic cave break", detail="Dawn of the Infinite · large environmental impact" },
     { id=5900043, category="novelty", label="Underpin — Lava Cannon", detail="Nemesis delve · signature weapon" },
     { id=1725127, category="novelty", label="Zekvir — Black Blood", detail="Nemesis delve · large signature cast" },
 }
@@ -902,15 +901,15 @@ for _, sound in ipairs(noveltyCatalog) do
     catalog[#catalog + 1] = sound
 end
 
--- Exact SoundKit choices used by Resonance 0.1-0.3. They intentionally live in a
--- temporary Misc / Legacy family so the user can identify and re-sort favorites.
+-- Exact SoundKit choices retained from Resonance 0.1-0.3 and canonized into
+-- the Arcane and Bronze families after in-game auditioning.
 local retainedLegacy = {
-    { key="UI_ORDERHALL_TALENT_READY_TOAST", category="novelty", label="UI — Order Hall ready toast" },
-    { key="UI_AZERITE_EMPOWERED_ITEM_LOOT_TOAST", category="novelty", label="UI — Azerite loot toast" },
-    { key="UI_LEGENDARY_LOOT_TOAST", category="novelty", label="UI — Legendary loot toast" },
-    { key="UI_CLASS_TALENT_LEARN_TALENT", category="novelty", label="UI — Talent learned" },
-    { key="UI_CLASS_TALENT_APPLY_COMPLETE", category="novelty", label="UI — Talents applied" },
-    { key="UI_RUNECARVING_OPEN_MAIN_WINDOW", category="novelty", label="UI — Runecarving window" },
+    { key="UI_ORDERHALL_TALENT_READY_TOAST", category="arcane", label="UI — Order Hall ready toast" },
+    { key="UI_AZERITE_EMPOWERED_ITEM_LOOT_TOAST", category="arcane", label="UI — Azerite loot toast" },
+    { key="UI_LEGENDARY_LOOT_TOAST", category="arcane", label="UI — Legendary loot toast" },
+    { key="UI_CLASS_TALENT_LEARN_TALENT", category="bronze", label="UI — Talent learned" },
+    { key="UI_CLASS_TALENT_APPLY_COMPLETE", category="bronze", label="UI — Talents applied" },
+    { key="UI_RUNECARVING_OPEN_MAIN_WINDOW", category="bronze", label="UI — Runecarving window" },
 }
 for _, entry in ipairs(retainedLegacy) do
     local soundKitID = SOUNDKIT and SOUNDKIT[entry.key]
@@ -963,7 +962,7 @@ local canonicalOverrides = {
     [1716549] = { category="void", label="Void Shift · Cast I", detail="Priest · Void Shift" },
     [1716550] = { category="void", label="Void Shift · Cast II", detail="Priest · Void Shift" },
     [3186660] = { category="novelty", label="Visions madness I", detail="N'Zoth-era signature shadow effect" },
-    [3186661] = { category="novelty", label="Visions madness II", detail="N'Zoth-era signature shadow effect" },
+    [3186661] = { category="void", label="Visions madness II", detail="N'Zoth-era signature shadow effect" },
     [1417557] = { category="novelty", label="Electrical charge I", detail="Large electrical cast · boss-scale" },
     [1417558] = { category="novelty", label="Electrical charge II", detail="Large electrical cast · boss-scale" },
     [1417607] = { category="air", label="Electrical impact I", detail="Medium reusable storm impact" },

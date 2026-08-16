@@ -105,7 +105,7 @@ local rules = {
     { id="shadow_voidform", spec=258, spell="Voidform", moment="Cast", event="SUCCEEDED", spellIDs={228264}, preset="subtle", cooldown=4, defaultOn=true,
       defaultSounds={1717716,5342340}, defaultDelays={0,100}, description="A deep opening for Voidform." },
     { id="shadow_void_torrent", spec=258, spell="Void Torrent", moment="Channel", event="CHANNEL_START", spellIDs={263165}, preset="subtle", cooldown=3, defaultOn=true,
-      defaultSounds={568751,568889}, defaultDelays={0,80}, description="One void-channel opening; no added beam loop." },
+      defaultSounds={568751,1716507}, defaultDelays={0,80}, description="One void-channel opening; no added beam loop." },
     { id="shadow_tentacle_slam", spec=258, spell="Tentacle Slam", moment="Cast", event="SUCCEEDED", spellIDs={1227280}, preset="medium", cooldown=1.1, defaultOn=true,
       defaultSounds={5342340}, defaultDelays={0}, description="A low Old God punctuation for the new cleave spell." },
     { id="shadow_void_blast", spec=258, spell="Void Blast", moment="Cast", event="SUCCEEDED", spellIDs={450405}, capability="priest_voidweaver", preset="medium", cooldown=1.1, defaultOn=true,

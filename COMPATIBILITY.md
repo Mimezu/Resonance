@@ -36,4 +36,12 @@ Account migrations run in numeric order through `ACCOUNT_MIGRATIONS`. Character/
 
 If an existing rule's built-in enabled state or layer defaults change, the release migration must materialize the old effective value before installing the new default. Do not ask an old sparse personal set to infer history from the current rule table; ambiguous legacy values must fail closed.
 
-The addon folder and SavedVariables are separate. Updating the addon preserves sets in `WTF`; reinstalling Windows, deleting `WTF`, or moving to another computer still requires a backup or a future export/import feature.
+## Shared transfer codes
+
+- `RES1` exports are data-only, versioned and checksummed. They never contain executable Lua.
+- A transfer freezes every current toggle, layer count, FileDataID/SoundKit ID, sound kind, last-known label and delay for exactly one specialization.
+- Imports preserve unknown rules and missing sounds, then run the same aliases, sound remaps and normalization used by SavedVariables upgrades.
+- Importing never overwrites or auto-loads a set. Name collisions create an `(Imported)` copy.
+- Future codecs may introduce a new prefix, but the addon must retain a permanent reader for `RES1` just as it retains old database migrations.
+
+The addon folder and SavedVariables are separate. Updating the addon preserves sets in `WTF`; reinstalling Windows, deleting `WTF`, or moving to another computer still requires a backup or an exported sound-set code.
