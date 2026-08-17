@@ -57,8 +57,12 @@ function ns:HandleCommand(message)
         self:Print("capability audit queued.")
     elseif command == "reset" then
         StaticPopup_Show("RESONANCE_RESET_CONFIRM")
+    elseif command == "help" then
+        self:OpenHelp()
+    elseif command == "tutorial" or command == "tour" then
+        self:StartTutorial()
     else
-        self:Print("/res options • on • off • toggle • test • audit • solo • minimap • refresh • reset")
+        self:Print("/res options • help • tutorial • on • off • toggle • test • audit • solo • minimap • refresh • reset")
     end
 end
 

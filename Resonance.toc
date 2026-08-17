@@ -2,7 +2,7 @@
 ## Title: Resonance
 ## Notes: Native, restrained sound accents for modern class gameplay.
 ## Author: Mimezu
-## Version: 1.10.0
+## Version: 1.12.0
 ## DefaultState: disabled
 ## SavedVariables: ResonanceDB
 ## SavedVariablesPerCharacter: ResonanceCharDB
@@ -30,5 +30,7 @@ Audition.lua
 Audio.lua
 Core.lua
 Options.lua
+Tutorial.lua
+Help.lua
 Minimap.lua
 Commands.lua

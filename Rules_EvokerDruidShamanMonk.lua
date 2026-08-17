@@ -5,12 +5,11 @@ local _, ns = ...
 ns.AdditionalSpecRules = ns.AdditionalSpecRules or {}
 
 local rules = {
-    -- Augmentation Evoker: bronze support magic, with only the proc opt-in.
+    -- Augmentation Evoker: bronze support magic and direct player actions.
     { id="aug_ebon_might", spec=1473, spell="Ebon Might", moment="Cast", name="Ebon Might", event="SUCCEEDED", spellIDs={395152}, cue="bronze", preset="subtle", cooldown=2.5, defaultOn=true, defaultSounds={5141281,4558561}, defaultDelays={0,80}, description="A bronze pulse when your group buff is renewed." },
     { id="aug_prescience", spec=1473, spell="Prescience", moment="Cast", name="Prescience", event="SUCCEEDED", spellIDs={409311}, cue="bronze", preset="medium", cooldown=0.8, defaultOn=true, defaultSounds={4558551}, defaultDelays={0}, description="A small time-magic accent for Prescience." },
     { id="aug_breath_of_eons", spec=1473, spell="Breath of Eons", moment="Cast", name="Breath of Eons", event="SUCCEEDED", spellIDs={403631}, cue="major", preset="subtle", cooldown=5, defaultOn=true, defaultSounds={4686040,4558551}, defaultDelays={0,120}, description="A decisive bronze wingbeat for your major cooldown." },
     { id="aug_upheaval_release", spec=1473, spell="Upheaval", moment="Release", name="Upheaval release", event="EMPOWER_STOP", spellIDs={396286,408092}, cue="earth", preset="subtle", cooldown=1.5, defaultOn=true, defaultSounds={4577695,4553587}, defaultDelays={0,100}, description="A grounded impact when Upheaval is released." },
-    { id="aug_essence_burst", spec=1473, spell="Essence Burst", moment="Ready", name="Essence Burst", event="AURA", auraIDs={369299,392268,396187,417402,430835}, cue="proc", preset="expressive", cooldown=1.2, defaultOn=false, defaultSounds={4558561}, defaultDelays={0}, description="Optional: a quiet cue when Essence Burst is newly gained." },
 
     -- Druid
     { id="balance_starsurge", spec=102, spell="Starsurge", moment="Cast", name="Starsurge", event="SUCCEEDED", spellIDs={78674}, cue="arcane", preset="medium", cooldown=0.8, defaultOn=true, defaultSounds={1597454,1597457}, defaultDelays={0,90}, description="A compact astral release for Starsurge." },
@@ -29,7 +28,6 @@ local rules = {
     { id="feral_shred", spec=103, spell="Shred", moment="Cast", name="Shred", event="SUCCEEDED", spellIDs={5221}, cue="nature", preset="expressive", cooldown=0.8, defaultOn=false, defaultSounds={4556842}, defaultDelays={0}, description="Optional single-target filler punctuation." },
     { id="feral_ferocious_bite", spec=103, spell="Ferocious Bite", moment="Cast", name="Ferocious Bite", event="SUCCEEDED", spellIDs={22568}, cue="nature", preset="medium", cooldown=1, defaultOn=true, defaultSounds={568813}, defaultDelays={0}, description="A clean finisher accent." },
     { id="feral_convoke", spec=103, spell="Convoke the Spirits", moment="Channeling", name="Convoke the Spirits", event="CHANNEL_START", spellIDs={391528}, cue="nature", preset="subtle", cooldown=4, defaultOn=true, defaultSounds={4556842,568377}, defaultDelays={0,100}, description="One verdant opening note for the channel." },
-    { id="feral_apex_predator", spec=103, spell="Apex Predator's Craving", moment="Ready", name="Apex Predator's Craving", event="AURA", auraIDs={391881}, cue="proc", preset="expressive", cooldown=1.5, defaultOn=false, defaultSounds={5259954}, defaultDelays={0}, description="Optional proc cue; avoid a sound on every ordinary finisher." },
 
     { id="guardian_rage_of_the_sleeper", spec=104, spell="Rage of the Sleeper", moment="Cast", name="Rage of the Sleeper", event="SUCCEEDED", spellIDs={200851}, cue="major", preset="subtle", cooldown=5, defaultOn=true, defaultSounds={4577695,4553591}, defaultDelays={0,120}, description="A heavy stone surge for Rage of the Sleeper." },
     { id="guardian_berserk", spec=104, spell="Berserk", moment="Cast", name="Berserk", event="SUCCEEDED", spellIDs={106951,394786}, cue="earth", preset="subtle", cooldown=5, defaultOn=true, defaultSounds={4556549,4553587}, defaultDelays={0,100}, description="An earthen growl for current Berserk or Incarnation." },

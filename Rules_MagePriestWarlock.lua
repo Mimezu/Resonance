@@ -30,8 +30,6 @@ local rules = {
       defaultSounds={568024,4573332}, defaultDelays={0,110}, description="A deep descending impact; its damage ticks remain silent." },
     { id="fire_frostfire_bolt", spec=63, spell="Frostfire Bolt", moment="Cast", event="SUCCEEDED", spellIDs={431044}, capability="frostfire", preset="medium", cooldown=1.1, defaultOn=true,
       defaultSounds={1631379,1685531}, defaultDelays={0,55}, description="Frostfire-only: a cool bolt with a small flame tail." },
-    { id="fire_fired_up", spec=63, spell="Fired Up (Apex)", moment="First stack", event="AURA_STACK", auraIDs={1257348,1257349}, capability="fired_up", stackThreshold=1, preset="subtle", cooldown=7, defaultOn=true,
-      defaultSounds={1390656,2428623}, defaultDelays={0,65}, description="Apex: confirms the first Fired Up stack, not every refresh." },
     { id="fire_fire_blast", spec=63, spell="Fire Blast", moment="Cast", event="SUCCEEDED", spellIDs={319836}, preset="expressive", cooldown=0.8, defaultOn=false,
       defaultSounds={568023}, defaultDelays={0}, description="Optional instant Hot Streak builder; disabled by default to avoid frequent accents." },
     { id="fire_fireball", spec=63, spell="Fireball", moment="Cast", event="SUCCEEDED", spellIDs={133}, preset="expressive", cooldown=1.2, defaultOn=false,
@@ -40,8 +38,6 @@ local rules = {
       defaultSounds={568023}, defaultDelays={0}, description="Optional movement filler accent; Scorch is instant." },
     { id="fire_flamestrike", spec=63, spell="Flamestrike", moment="Release", event="SUCCEEDED", spellIDs={2120}, preset="medium", cooldown=1.2, defaultOn=true,
       defaultSounds={568024,4573332}, defaultDelays={0,70}, description="A compact area-fire release for the current AoE rotation." },
-    { id="fire_hot_streak", spec=63, spell="Hot Streak", moment="Ready", event="AURA", auraIDs={195283}, preset="expressive", cooldown=1.2, defaultOn=false,
-      defaultSounds={2428623}, defaultDelays={0}, description="Optional proc cue when an instant Pyroblast is ready." },
 
     -- Discipline Priest
     { id="disc_penance", spec=256, spell="Penance", moment="Channel", event="CHANNEL_START", spellIDs={47540}, preset="medium", cooldown=1.2, defaultOn=true,
@@ -98,8 +94,6 @@ local rules = {
       defaultSounds={5207969,5205686}, defaultDelays={0,100}, description="A major protective cooldown." },
     { id="holy_power_infusion", spec=257, spell="Power Infusion", moment="Cast", event="SUCCEEDED", spellIDs={10060}, preset="subtle", cooldown=4, defaultOn=true,
       defaultSounds={5207969,5259954}, defaultDelays={0,90}, description="A short support cooldown declaration." },
-    { id="holy_benediction", spec=257, spell="Benediction (Apex)", moment="Ready", event="AURA", auraIDs={1262755,1262758,1262760}, capability="priest_benediction", preset="subtle", cooldown=5, defaultOn=true,
-      defaultSounds={5207969,5259954}, defaultDelays={0,100}, description="Apex: one cue when Benediction becomes active." },
 
     -- Shadow Priest
     { id="shadow_voidform", spec=258, spell="Voidform", moment="Cast", event="SUCCEEDED", spellIDs={228264}, preset="subtle", cooldown=4, defaultOn=true,
@@ -126,8 +120,6 @@ local rules = {
       defaultSounds={568184}, defaultDelays={0}, description="A compact execute-window release." },
     { id="shadow_shadowfiend", spec=258, spell="Shadowfiend", moment="Cast", event="SUCCEEDED", spellIDs={34433}, preset="subtle", cooldown=4, defaultOn=true,
       defaultSounds={568751,5342340}, defaultDelays={0,100}, description="A major shadow summon for the burst window." },
-    { id="shadow_void_apparitions", spec=258, spell="Void Apparitions (Apex)", moment="Ready", event="AURA", auraIDs={1264096,1264104,1264107}, capability="priest_void_apparitions", preset="subtle", cooldown=5, defaultOn=true,
-      defaultSounds={5342340,5259954}, defaultDelays={0,100}, description="Apex: one cue when Void Apparitions becomes active." },
 
     -- Affliction Warlock
     { id="aff_haunt", spec=265, spell="Haunt", moment="Cast", event="SUCCEEDED", spellIDs={48181}, preset="medium", cooldown=1.1, defaultOn=true,
@@ -154,8 +146,6 @@ local rules = {
       defaultSounds={568751}, defaultDelays={0}, description="Optional one-time filler-channel opening." },
     { id="aff_shadow_bolt", spec=265, spell="Shadow Bolt", moment="Cast", event="SUCCEEDED", spellIDs={232670}, preset="expressive", cooldown=1.2, defaultOn=false,
       defaultSounds={568406}, defaultDelays={0}, description="Optional filler cast accent." },
-    { id="aff_shadow_nathreza", spec=265, spell="Shadow of Nathreza (Apex)", moment="Ready", event="AURA", auraIDs={1261984,1261990}, capability="warlock_shadow_nathreza", preset="subtle", cooldown=5, defaultOn=true,
-      defaultSounds={568184,5342340}, defaultDelays={0,100}, description="Apex: one cue when the Haunt augmentation becomes active." },
     -- Demonology Warlock
     { id="demo_hand_of_guldan", spec=266, spell="Hand of Gul'dan", moment="Cast", event="SUCCEEDED", spellIDs={105174}, preset="medium", cooldown=1, defaultOn=true,
       defaultSounds={2114932,568058}, defaultDelays={0,65}, description="A fel hand thrown into the demon swarm." },
@@ -206,8 +196,6 @@ local rules = {
       defaultSounds={2068305,2068257}, defaultDelays={0,80}, description="A focused cleave-window declaration." },
     { id="dest_malevolence", spec=267, spell="Malevolence", moment="Cast", event="SUCCEEDED", spellIDs={430014}, capability="warlock_hellcaller", preset="subtle", cooldown=3, defaultOn=true,
       defaultSounds={568281,568123}, defaultDelays={0,85}, description="Hellcaller: a deliberate fel-shadow burst window." },
-    { id="dest_embers_nihilam", spec=267, spell="Embers of Nihilam (Apex)", moment="Ready", event="AURA", auraIDs={1265770,1265772,1265774}, capability="warlock_embers_nihilam", preset="subtle", cooldown=5, defaultOn=true,
-      defaultSounds={2068356,5342340}, defaultDelays={0,100}, description="Apex: one cue when Embers of Nihilam becomes active." },
 }
 
 ns.AdditionalSpecRules = ns.AdditionalSpecRules or {}

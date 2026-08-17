@@ -35,7 +35,6 @@ S("feral_rake_rip", false, {L(568813)}, false, {L(568813)}, false, {L(568813)})
 S("feral_shred", false, {L(4556842)}, false, {L(4556842)}, false, {L(4556842)})
 S("feral_ferocious_bite", false, {L(568813)}, true, {L(568813)}, true, {L(568813),L(4556844,65)})
 S("feral_convoke", true, {L(4556842)}, true, {L(4556842),L(568377,100)}, true, {L(4556842),L(568377,85),L(5259954,160)})
-S("feral_apex_predator", false, {L(5259954)}, false, {L(5259954)}, true, {L(5259954)})
 
 -- Guardian: low, grounded weight; frequent builders remain unaccented.
 S("guardian_rage_of_the_sleeper", true, {L(4577695)}, true, {L(4577695),L(4553587,105)}, true, {L(4577695),L(4553587,90),L(568813,155)})

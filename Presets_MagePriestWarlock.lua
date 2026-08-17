@@ -33,8 +33,6 @@ end
 
 -- Arcane Mage: crystalline pressure, controlled mana releases, and restrained
 -- cosmic bloom.  Frequent resource/proc cues are never part of the base mix.
-add("arcane_clearcasting",       "",    {5520066, 0})
-add("arcane_four_charges",      "",    {959721, 0})
 add("arcane_surge",             "sme", {5520037, 0}, {4686044, 95}, {5259954, 155})
 add("arcane_barrage",           "me",  {4686040, 45}, {959721, 0})
 add("arcane_missiles",          "e",   {5520066, 0}, {5259954, 90})
@@ -52,29 +50,22 @@ add("fire_pyroblast",           "me",  {1392377, 0}, {4573332, 70})
 add("fire_combustion",          "sme", {1390656, 0}, {4573332, 75}, {2428623, 145})
 add("fire_meteor",              "sme", {568024, 0}, {4573332, 115})
 add("fire_frostfire_bolt",      "me",  {1631379, 0}, {1685531, 65})
-add("fire_fired_up",            "",    {1390656, 0})
 add("fire_fire_blast",          "e",   {568023, 0})
 add("fire_fireball",            "e",   {1685528, 0})
 add("fire_scorch",              "e",   {568023, 0})
 add("fire_flamestrike",         "me",  {568024, 0}, {4573332, 105})
-add("fire_hot_streak",          "",    {2428623, 0})
 
 -- Frost Mage: brittle launches and ice fracture, avoiding bright UI-like proc
 -- cues.  Core shatter spells enter at Medium; filler and procs stay optional.
 add("frost_frozen_orb",         "me",  {4612975, 0}, {4613005, 85})
 add("frost_ray",                "sme", {4612975, 0}, {568047, 95})
 add("frost_glacial_spike",      "sme", {4613005, 0}, {568047, 60})
-add("frostfire_empowerment",    "",    {4612975, 0})
-add("frost_fingers",            "",    {5259954, 0})
 add("frost_frostbolt_12_1",     "e",   {4612975, 0})
 add("frost_frostfire_bolt_12_1", "me", {4612975, 0}, {568023, 65})
 add("frost_flurry_12_1",        "e",   {4612975, 0}, {5259954, 80})
 add("frost_ice_lance_12_1",     "e",   {4613005, 0})
 add("frost_comet_storm_12_1",   "me",  {4613005, 0}, {568047, 75})
 add("frost_blizzard_12_1",      "e",   {4612975, 0})
-add("frost_hand_of_frost_12_1", "",    {4612975, 0})
-add("frost_brain_freeze_12_1",  "",    {5259954, 0})
-add("frost_fingers_12_1",       "",    {5259954, 0})
 
 -- Discipline Priest: luminous force tempered by void.  Shields and Penance
 -- remain recognizable; spammed Smite/Flash Heal only appear in Expressive.
@@ -107,7 +98,6 @@ add("holy_flash_heal",          "e",   {1698678, 0})
 add("holy_holy_fire",           "e",   {567985, 0})
 add("holy_guardian_spirit",     "sme", {5207969, 0}, {5205686, 100}, {5259954, 165})
 add("holy_power_infusion",      "sme", {5207969, 0}, {5259954, 105})
-add("holy_benediction",         "",    {5207969, 0}, {5259954, 100})
 
 -- Shadow Priest: dense void pressure with short, dry accents.  DoTs and Mind
 -- Blast are held for Expressive so the rotation retains space.
@@ -123,7 +113,6 @@ add("shadow_void_volley",       "me",  {5342340, 0}, {6995073, 80})
 add("shadow_mind_blast",        "e",   {1714480, 0})
 add("shadow_shadow_word_death", "me",  {568184, 0}, {5342340, 65})
 add("shadow_shadowfiend",       "sme", {568751, 0}, {5342340, 95})
-add("shadow_void_apparitions",  "",    {5342340, 0}, {5259954, 100})
 
 -- Affliction Warlock: curses remain soft and textural; detonations, summons,
 -- and soul-harvest moments supply the weight.
@@ -139,7 +128,6 @@ add("aff_dark_harvest",         "sme", {568751, 0}, {5342340, 90})
 add("aff_malefic_grasp",        "e",   {2068359, 0})
 add("aff_drain_soul",           "e",   {568751, 0})
 add("aff_shadow_bolt",          "e",   {568406, 0})
-add("aff_shadow_nathreza",      "",    {568184, 0}, {5342340, 90})
 
 -- Demonology Warlock: compact fel summons and implosive weight.  Builders are
 -- expressive-only; demons and shard spenders define Medium.
@@ -170,4 +158,3 @@ add("dest_soul_fire",           "me",  {2068356, 0}, {2068257, 75})
 add("dest_channel_demonfire",   "sme", {2068356, 0}, {2068353, 100})
 add("dest_havoc",               "sme", {2068305, 0}, {2068257, 85})
 add("dest_malevolence",         "sme", {568281, 0}, {568123, 85})
-add("dest_embers_nihilam",      "",    {2068356, 0}, {5342340, 95})

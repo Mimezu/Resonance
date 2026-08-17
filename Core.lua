@@ -15,9 +15,6 @@ local EVENT_NAMES = {
     CHANNEL_START = "UNIT_SPELLCAST_CHANNEL_START",
     EMPOWER_START = "UNIT_SPELLCAST_EMPOWER_START",
     EMPOWER_STOP = "UNIT_SPELLCAST_EMPOWER_STOP",
-    AURA = "UNIT_AURA",
-    AURA_STACK = "UNIT_AURA",
-    POWER = "UNIT_POWER_UPDATE",
 }
 
 local CASTING_END_EVENTS = {
@@ -53,7 +50,6 @@ function ns:CompileRules()
     playerFrame:UnregisterAllEvents()
     self.Runtime.activeRules = {}
     self.Runtime.eventRules = {}
-    self.Runtime.auraInstances = {}
     self.Runtime.lastRulePlay = {}
     self.Runtime.empowerSpellID = nil
 
@@ -92,13 +88,6 @@ function ns:CompileRules()
         playerFrame:RegisterUnitEvent(event, "player")
     end
 
-    if specID == 62 then
-        local powerType = Enum and Enum.PowerType and Enum.PowerType.ArcaneCharges or 16
-        local value = UnitPower("player", powerType)
-        if self:IsSafeValue(value) and type(value) == "number" then
-            self.Runtime.lastArcaneCharges = value
-        end
-    end
 end
 
 function ns:Refresh(reason)
@@ -181,117 +170,6 @@ local function HandleEmpowerStop(eventSpellID, empowerComplete)
     return RouteSpellEvent("EMPOWER_STOP", spellID)
 end
 
-local function IsWatchedAura(spellID)
-    for _, rule in ipairs(ns.Runtime.eventRules.AURA or {}) do
-        if rule.auraSet[spellID] then
-            return true
-        end
-    end
-    for _, rule in ipairs(ns.Runtime.eventRules.AURA_STACK or {}) do
-        if rule.auraSet[spellID] then
-            return true
-        end
-    end
-    return false
-end
-
-local function ProcessAura(aura, isNew)
-    if not ns:IsSafeTable(aura) then
-        return
-    end
-    local spellID = aura.spellId
-    local instanceID = aura.auraInstanceID
-    if not ns:IsSafeValue(spellID) or type(spellID) ~= "number" then
-        return
-    end
-    if not IsWatchedAura(spellID) then
-        return
-    end
-
-    local applications = aura.applications
-    if not ns:IsSafeValue(applications) or type(applications) ~= "number" then
-        applications = 0
-    end
-
-    local previousApplications = 0
-    if ns:IsSafeValue(instanceID) and type(instanceID) == "number" and ns.Runtime.auraInstances[instanceID] then
-        previousApplications = ns.Runtime.auraInstances[instanceID].applications or 0
-    end
-
-    for _, rule in ipairs(ns.Runtime.eventRules.AURA or {}) do
-        if isNew and rule.auraSet[spellID] then
-            ns:PlayRule(rule)
-        end
-    end
-    for _, rule in ipairs(ns.Runtime.eventRules.AURA_STACK or {}) do
-        if rule.auraSet[spellID] and applications >= rule.stackThreshold and previousApplications < rule.stackThreshold then
-            ns:PlayRule(rule)
-        end
-    end
-
-    if ns:IsSafeValue(instanceID) and type(instanceID) == "number" then
-        ns.Runtime.auraInstances[instanceID] = { spellID = spellID, applications = applications }
-    end
-end
-
-local function HandleAuraUpdate(updateInfo)
-    if not ns:IsSafeTable(updateInfo) then
-        return
-    end
-
-    local isFullUpdate = updateInfo.isFullUpdate
-    if ns:IsSecret(isFullUpdate) or isFullUpdate then
-        return
-    end
-
-    local addedAuras = updateInfo.addedAuras
-    if ns:IsSafeTable(addedAuras) then
-        for _, aura in ipairs(addedAuras) do
-            ProcessAura(aura, true)
-        end
-    end
-
-    local updatedAuraInstanceIDs = updateInfo.updatedAuraInstanceIDs
-    if ns:IsSafeTable(updatedAuraInstanceIDs) then
-        for _, instanceID in ipairs(updatedAuraInstanceIDs) do
-            if ns:IsSafeValue(instanceID) and type(instanceID) == "number"
-                and ns.Runtime.auraInstances[instanceID] then
-                local ok, aura = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, "player", instanceID)
-                if ok and aura then
-                    ProcessAura(aura, false)
-                end
-            end
-        end
-    end
-
-    local removedAuraInstanceIDs = updateInfo.removedAuraInstanceIDs
-    if ns:IsSafeTable(removedAuraInstanceIDs) then
-        for _, instanceID in ipairs(removedAuraInstanceIDs) do
-            if ns:IsSafeValue(instanceID) and type(instanceID) == "number" then
-                ns.Runtime.auraInstances[instanceID] = nil
-            end
-        end
-    end
-end
-
-local function HandlePowerUpdate(powerToken)
-    if not ns:IsSafeValue(powerToken) or powerToken ~= "ARCANE_CHARGES" or ns.Runtime.specID ~= 62 then
-        return
-    end
-    local powerType = Enum and Enum.PowerType and Enum.PowerType.ArcaneCharges or 16
-    local charges = UnitPower("player", powerType)
-    if not ns:IsSafeValue(charges) or type(charges) ~= "number" then
-        return
-    end
-    local previous = ns.Runtime.lastArcaneCharges or charges
-    ns.Runtime.lastArcaneCharges = charges
-    if charges >= 4 and previous < 4 then
-        for _, rule in ipairs(ns.Runtime.eventRules.POWER or {}) do
-            ns:PlayRule(rule)
-        end
-    end
-end
-
 playerFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     if not ns:IsSafeValue(unit) or unit ~= "player" then
         return
@@ -324,10 +202,6 @@ playerFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
         or event == "UNIT_SPELLCAST_INTERRUPTED"
         or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
         ns:StopCastingSounds(0.08)
-    elseif event == "UNIT_AURA" then
-        HandleAuraUpdate(arg2)
-    elseif event == "UNIT_POWER_UPDATE" then
-        HandlePowerUpdate(arg2)
     end
 end)
 

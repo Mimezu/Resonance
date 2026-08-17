@@ -160,8 +160,6 @@ ns.SoundPalettes = {
 
 local rules = {
     -- Arcane Mage
-    { id = "arcane_clearcasting", spec = 62, name = "Clearcasting", event = "AURA", auraIDs = { 263725 }, cue = "proc", preset="medium", cooldown = 1.2, defaultOn = true, description = "A soft accent when Clearcasting is newly gained." },
-    { id = "arcane_four_charges", spec = 62, name = "Four Arcane Charges", event = "POWER", cue = "ready", preset="medium", cooldown = 1.5, defaultOn = true, description = "Sounds only when crossing into four Arcane Charges." },
     { id = "arcane_surge", spec = 62, name = "Arcane Surge", event = "SUCCEEDED", spellIDs = { 365350, 365362 }, cue = "major", preset="subtle", cooldown = 4.0, defaultOn = true, description = "Major cooldown punctuation; palette adapts to the active hero tree." },
     { id = "arcane_barrage", spec = 62, name = "Arcane Barrage", event = "SUCCEEDED", spellIDs = { 44425 }, cue = "release", preset="medium", cooldown = 0.8, defaultOn = true, description = "A restrained resolution when Arcane Charges are released." },
     { id = "arcane_missiles", spec = 62, name = "Arcane Missiles", event = "CHANNEL_START", spellIDs = { 5143 }, cue = "proc", preset="expressive", cooldown = 1.5, defaultOn = false, description = "One channel-start sparkle, never individual missile ticks." },
@@ -171,17 +169,13 @@ local rules = {
     { id = "frost_frozen_orb", spec = 64, name = "Frozen Orb", event = "SUCCEEDED", spellIDs = { 84714 }, cue = "frost", preset="medium", cooldown = 1.5, defaultOn = true, description = "One launch accent; Orb ticks stay silent." },
     { id = "frost_ray", spec = 64, name = "Ray of Frost", event = "CHANNEL_START", spellIDs = { 205021 }, cue = "major", preset="subtle", cooldown = 3.0, defaultOn = true, description = "The modern Frost major-cooldown cue. Hand of Frost alters its Apex context." },
     { id = "frost_glacial_spike", spec = 64, name = "Glacial Spike", event = "SUCCEEDED", spellIDs = { 199786 }, cue = "release", preset="medium", cooldown = 1.2, defaultOn = true, description = "A brittle release when the periodic replacement spell is cast." },
-    { id = "frostfire_empowerment", spec = 64, name = "Frostfire Empowerment", event = "AURA", auraIDs = { 431176, 431177 }, capability = "frostfire", cue = "ready", preset="medium", cooldown = 1.5, defaultOn = true, description = "Frostfire-only readiness cue." },
-    { id = "frost_fingers", spec = 64, name = "Fingers of Frost", event = "AURA", auraIDs = { 44544 }, cue = "proc", preset="expressive", cooldown = 1.2, defaultOn = false, description = "Optional; disabled by default because it can be frequent." },
 
     -- Devastation Evoker
-    { id = "dev_essence_burst", spec = 1467, name = "Essence Burst", event = "AURA", auraIDs = { 359618, 369297, 369299, 392268, 396187, 417402, 430835 }, cue = "proc", preset="medium", cooldown = 1.2, defaultOn = true, description = "Sounds only when the proc is newly gained." },
     { id = "dev_fire_breath", spec = 1467, name = "Fire Breath release", event = "EMPOWER_STOP", spellIDs = { 357208, 382266 }, cue = "draconic", preset="subtle", cooldown = 1.5, defaultOn = true, description = "Plays only when the empower stop event confirms a completed Fire Breath release." },
     { id = "dev_eternity_surge", spec = 1467, name = "Eternity Surge release", event = "EMPOWER_STOP", spellIDs = { 359073, 359077 }, cue = "release", preset="subtle", cooldown = 1.5, defaultOn = true, description = "Plays only when the empower stop event confirms a completed Eternity Surge release." },
     { id = "dev_shattering_stars", spec = 1467, name = "Shattering Stars", event = "SUCCEEDED", spellIDs = { 1265802 }, cue = "release", preset="medium", cooldown = 1.2, defaultOn = true, description = "A crisp impact accent for the current Shattering Stars cast." },
     { id = "dev_disintegrate", spec = 1467, name = "Disintegrate", event = "CHANNEL_START", spellIDs = { 356995 }, cue = "ready", preset="expressive", cooldown = 1.2, defaultOn = false, description = "Optional one-time beam lock; no continuous added sound." },
     { id = "dev_dragonrage", spec = 1467, name = "Dragonrage", event = "SUCCEEDED", spellIDs = { 375087 }, cue = "major", preset="subtle", cooldown = 5.0, defaultOn = true, description = "Major draconic burst-window accent." },
-    { id = "dev_rising_fury", spec = 1467, name = "Rising Fury (Apex)", event = "AURA_STACK", auraIDs = { 1271687, 1271783, 1271788, 1271796 }, capability = "risingFury", stackThreshold = 5, cue = "apex", preset="subtle", cooldown = 8.0, defaultOn = false, description = "A restrained Apex accent when Rising Fury reaches five stacks." },
 
     -- Preservation Evoker
     { id = "pres_echo", spec = 1468, name = "Echo", event = "SUCCEEDED", spellIDs = { 364343, 364446 }, cue = "bronzeEcho", preset="medium", cooldown = 0.6, delay = 0.085, defaultOn = true, description = "A subtle bronze afterimage about 85 ms after Echo's original cast sound." },
@@ -226,12 +220,7 @@ local names = {
 for _, rule in ipairs(rules) do
     local explicit = names[rule.id]
     rule.spell = rule.spell or (explicit and explicit[1]) or rule.name
-    rule.moment = rule.moment or (explicit and explicit[2]) or ((rule.event == "AURA" or rule.event == "AURA_STACK") and "Proc" or "Cast")
-    -- "Ready" used to mean cooldown readiness. Aura-driven accents are
-    -- ordinary proc moments, so keep the trigger but present the honest name.
-    if rule.moment == "Ready" then
-        rule.moment = "Proc"
-    end
+    rule.moment = rule.moment or (explicit and explicit[2]) or "Cast"
     rule.defaultSounds = rule.defaultSounds or defaultCueSounds[rule.cue] or defaultCueSounds.proc
 end
 
@@ -322,7 +311,6 @@ end
 
 for _, rule in ipairs(rules) do
     rule.spellSet = ToSet(rule.spellIDs)
-    rule.auraSet = ToSet(rule.auraIDs)
     ns.RuleByID[rule.id] = rule
     ns.RulesBySpec[rule.spec] = ns.RulesBySpec[rule.spec] or {}
     table.insert(ns.RulesBySpec[rule.spec], rule)

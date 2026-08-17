@@ -409,6 +409,19 @@ local function CreateSection(parent, title, subtitle, height)
     return frame
 end
 
+-- Small UI toolkit shared by the standalone Help Center and tutorial. Keeping
+-- these primitives here guarantees every Resonance window uses one visual
+-- language without copying styling code between modules.
+ns.UI = {
+    COLORS = COLORS,
+    ApplyBackdrop = ApplyBackdrop,
+    SkinScrollFrame = SkinScrollFrame,
+    CreateText = CreateText,
+    CreateButton = CreateButton,
+    CreateCloseButton = CreateCloseButton,
+    CreateSection = CreateSection,
+}
+
 local function CreateCheckRow(parent, label, description, getter, setter)
     local row = CreateFrame("Frame", nil, parent)
     row:SetSize(350, 40)
@@ -469,8 +482,20 @@ local function CreateEditBox(parent, width)
     box:SetNumeric(true)
     box:SetMaxLetters(4)
     box:SetFontObject("GameFontHighlightSmall")
-    box:SetTextInsets(7, 7, 0, 0)
+    box:SetJustifyH("LEFT")
+    box:SetTextInsets(7, 5, 0, 0)
     ApplyBackdrop(box, COLORS.panel, COLORS.border)
+    box:SetScript("OnTextChanged", function(self, userInput)
+        if not userInput or self._normalizingNumericText then return end
+        local raw = self:GetText() or ""
+        local normalized = raw:gsub("%D", ""):sub(1, 4)
+        if normalized ~= raw then
+            self._normalizingNumericText = true
+            self:SetText(normalized)
+            self:SetCursorPosition(#normalized)
+            self._normalizingNumericText = nil
+        end
+    end)
     box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
     return box
@@ -500,6 +525,7 @@ function ns:CreateSoundPicker()
         picker.dropCategory = nil
         if picker.dragBadge then picker.dragBadge:Hide() end
         ns:StopPreviewSound()
+        if ns.TutorialSignal then ns:TutorialSignal("sound-picker-closed") end
     end)
 
     local dragBadge = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
@@ -542,6 +568,7 @@ function ns:CreateSoundPicker()
     local categoryPane = CreateFrame("Frame", nil, picker, "BackdropTemplate")
     categoryPane:SetPoint("TOPLEFT", 14, -66); categoryPane:SetPoint("BOTTOMLEFT", 14, 54); categoryPane:SetWidth(148)
     ApplyBackdrop(categoryPane, COLORS.cardAlt)
+    picker.categoryPane = categoryPane
     local categoryScroll = CreateFrame("ScrollFrame", nil, categoryPane, "UIPanelScrollFrameTemplate")
     categoryScroll:SetPoint("TOPLEFT", 5, -5)
     categoryScroll:SetPoint("BOTTOMRIGHT", -24, 5)
@@ -731,6 +758,7 @@ function ns:CreateSoundPicker()
                 picker.pendingID = self.sound.id
             end
             ns:PreviewSoundFile(self.sound.id)
+            if ns.TutorialSignal then ns:TutorialSignal("sound-auditioned", self.sound.id) end
             picker:RefreshSounds()
         end)
         self.soundButtons[index] = button
@@ -875,24 +903,38 @@ function ns:CreateSoundPicker()
     local cancel = CreateButton(picker, CANCEL, 86, function() picker:Hide() end)
     cancel:SetPoint("BOTTOMRIGHT", -105, 16)
     local okay = CreateButton(picker, OKAY, 86, function()
+        if ns.TutorialCanCommitSound and not ns:TutorialCanCommitSound(picker.pendingID) then return end
         if picker.callback then picker.callback(picker.pendingID) end
+        if ns.TutorialSignal then ns:TutorialSignal("sound-committed", picker.pendingID) end
         picker:Hide()
     end, true)
     okay:SetPoint("BOTTOMRIGHT", -14, 16)
+    picker.cancel = cancel
+    picker.okay = okay
     picker:Hide()
 end
 
-local MOMENT_COLUMNS = 3
+local MOMENT_CELL_WIDTH = 328
+local MOMENT_CELL_GAP = 4
+local MOMENT_CONTENT_LEFT = 168
+local SOUND_SWATCH_WIDTH = 208
+local DELAY_FIELD_WIDTH = 50
 local MOMENT_LAYER_HEIGHT = 24
 
 local function GetMomentCellHeight(rule)
     return 94 + math.max(0, ns:GetRuleLayerCount(rule) - 2) * MOMENT_LAYER_HEIGHT
 end
 
-local function GetSpellCardLayout(spellRules)
+local function GetMomentColumns(cardWidth, momentCount)
+    local available = math.max(MOMENT_CELL_WIDTH, (tonumber(cardWidth) or 0) - MOMENT_CONTENT_LEFT - 12)
+    return math.max(1, math.min(momentCount, math.floor((available + MOMENT_CELL_GAP) / (MOMENT_CELL_WIDTH + MOMENT_CELL_GAP))))
+end
+
+local function GetSpellCardLayout(spellRules, columns)
+    columns = math.max(1, tonumber(columns) or 1)
     local rowHeights = {}
     for index, rule in ipairs(spellRules) do
-        local row = math.floor((index - 1) / MOMENT_COLUMNS) + 1
+        local row = math.floor((index - 1) / columns) + 1
         rowHeights[row] = math.max(rowHeights[row] or 0, GetMomentCellHeight(rule))
     end
     local height = 4
@@ -900,18 +942,22 @@ local function GetSpellCardLayout(spellRules)
     return math.max(80, height), rowHeights
 end
 
-local function CreateMomentCell(parent, rule, index, topOffset, cellHeight)
+local function CreateMomentCell(parent, rule, cellHeight)
     local cell = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    cell:SetSize(164, cellHeight)
-    local column = (index - 1) % MOMENT_COLUMNS
-    cell:SetPoint("TOPLEFT", 168 + column * 166, -topOffset)
+    cell:SetSize(MOMENT_CELL_WIDTH, cellHeight)
     ApplyBackdrop(cell, COLORS.panel, { 0.12, 0.13, 0.19, 1 })
+    cell.rule = rule
+    cell.layerChecks = {}
+    cell.swatches = {}
+    cell.delays = {}
+    cell.removeButtons = {}
 
     local enabled = CreateModernCheck(cell, 16)
     enabled:SetSize(19, 19); enabled:SetPoint("TOPLEFT", 4, -3)
     enabled:SetScript("OnClick", function(self) ns:SetRuleEnabled(rule.id, self:GetChecked() == true) end)
     enabled.getter = function() return ns:GetRuleEnabled(rule) end
     RegisterOptionWidget(enabled)
+    cell.enabled = enabled
 
     local title = CreateText(cell, "GameFontNormalSmall", rule.moment)
     title:SetPoint("LEFT", enabled, "RIGHT", 4, 0)
@@ -919,7 +965,10 @@ local function CreateMomentCell(parent, rule, index, topOffset, cellHeight)
     title:SetJustifyH("LEFT")
     title:SetWordWrap(false)
     title:SetTextColor(unpack(COLORS.teal))
-    local hearAdded = CreateButton(cell, "", 20, function() ns:PlayRule(rule, true) end, true)
+    local hearAdded = CreateButton(cell, "", 20, function()
+        ns:PlayRule(rule, true)
+        if ns.TutorialSignal then ns:TutorialSignal("moment-previewed", rule.id) end
+    end, true)
     hearAdded:SetPoint("TOPRIGHT", -4, -3)
     local playIcon = hearAdded:CreateTexture(nil, "ARTWORK")
     playIcon:SetSize(12, 12)
@@ -950,11 +999,12 @@ local function CreateMomentCell(parent, rule, index, topOffset, cellHeight)
         GameTooltip:Show()
     end)
     hearAdded:SetScript("OnLeave", GameTooltip_Hide)
+    cell.preview = hearAdded
 
     local function LayerLine(layerIndex, y)
         local layerCheck = CreateModernCheck(cell, 15)
         layerCheck:SetSize(18,18); layerCheck:SetPoint("TOPLEFT", 4, y)
-        local swatch = CreateButton(cell, "", 66, function()
+        local swatch = CreateButton(cell, "", SOUND_SWATCH_WIDTH, function()
             local current = ns:GetLayerConfig(rule, layerIndex)
             ns:OpenSoundPicker(current.soundID, function(soundID)
                 ns:SetLayerConfig(rule, layerIndex, { soundID=soundID, enabled=true })
@@ -969,8 +1019,11 @@ local function CreateMomentCell(parent, rule, index, topOffset, cellHeight)
         swatchText:SetJustifyH("LEFT")
         swatchText:SetWordWrap(false)
         if swatchText.SetMaxLines then swatchText:SetMaxLines(1) end
-        local delay = CreateEditBox(cell, 30)
+        local delay = CreateEditBox(cell, DELAY_FIELD_WIDTH)
         delay:SetPoint("LEFT", swatch, "RIGHT", 4, 0)
+        cell.layerChecks[layerIndex] = layerCheck
+        cell.swatches[layerIndex] = swatch
+        cell.delays[layerIndex] = delay
         layerCheck:SetScript("OnClick", function(self)
             ns:SetLayerConfig(rule, layerIndex, {enabled=self:GetChecked()==true})
             ns:QueueRefresh("layer")
@@ -1006,37 +1059,56 @@ local function CreateMomentCell(parent, rule, index, topOffset, cellHeight)
             remove:SetHeight(20)
             remove:SetPoint("LEFT", delay, "RIGHT", 3, 0)
             AddTooltip(remove, "Remove layer", "Removes this added sound layer and shifts later layers upward.")
+            cell.removeButtons[layerIndex] = remove
         end
     end
     for layerIndex = 1, ns:GetRuleLayerCount(rule) do
         LayerLine(layerIndex, -25 - (layerIndex - 1) * MOMENT_LAYER_HEIGHT)
     end
     local addLayer = CreateButton(cell, "+ layer", 54, function()
-        if ns:AddRuleLayer(rule) then ns:RebuildOptionsSpec(rule.spec) end
+        if ns:AddRuleLayer(rule) then
+            ns:RebuildOptionsSpec(rule.spec)
+            if ns.TutorialSignal then ns:TutorialSignal("layer-added", rule.id) end
+        end
     end)
     addLayer:SetHeight(18)
     addLayer:SetPoint("BOTTOMLEFT", 4, 3)
     addLayer:SetEnabled(ns:GetRuleLayerCount(rule) < ns.MAX_RULE_LAYERS)
     AddTooltip(addLayer, "Add sound layer", "Adds another independently selectable sound and delay. Up to " .. ns.MAX_RULE_LAYERS .. " layers per moment.")
+    cell.addLayer = addLayer
     return cell
 end
 
 local function CreateSpellCard(parent, spellName, spellRules, y)
     local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    local height, rowHeights = GetSpellCardLayout(spellRules)
-    card:SetPoint("TOPLEFT", 10, y); card:SetPoint("TOPRIGHT", -10, y); card:SetHeight(height)
+    card:SetPoint("TOPLEFT", 10, y); card:SetPoint("TOPRIGHT", -10, y); card:SetHeight(80)
     ApplyBackdrop(card, COLORS.cardAlt, {0.16,0.17,0.24,1})
     local name = CreateText(card, "GameFontNormal", spellName)
     name:SetPoint("TOPLEFT", 12, -15); name:SetPoint("RIGHT", card, "LEFT", 156, 0); name:SetJustifyH("LEFT")
     local count = CreateText(card, "GameFontHighlightSmall", #spellRules .. (#spellRules == 1 and " moment" or " moments"))
     count:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -4); count:SetTextColor(unpack(COLORS.muted))
-    local rowOffsets = { 4 }
-    for row = 2, #rowHeights do rowOffsets[row] = rowOffsets[row - 1] + rowHeights[row - 1] + 4 end
+    card.momentCells = {}
+    card.ruleCells = {}
     for index, rule in ipairs(spellRules) do
-        local row = math.floor((index - 1) / MOMENT_COLUMNS) + 1
-        CreateMomentCell(card, rule, index, rowOffsets[row], rowHeights[row])
+        card.momentCells[index] = CreateMomentCell(card, rule, GetMomentCellHeight(rule))
+        card.ruleCells[rule.id] = card.momentCells[index]
     end
-    return card, height
+    function card:Reflow()
+        local columns = GetMomentColumns(self:GetWidth(), #spellRules)
+        local height, rowHeights = GetSpellCardLayout(spellRules, columns)
+        local rowOffsets = { 4 }
+        for row = 2, #rowHeights do rowOffsets[row] = rowOffsets[row - 1] + rowHeights[row - 1] + 4 end
+        for index, cell in ipairs(self.momentCells) do
+            local column = (index - 1) % columns
+            local row = math.floor((index - 1) / columns) + 1
+            cell:ClearAllPoints()
+            cell:SetPoint("TOPLEFT", MOMENT_CONTENT_LEFT + column * (MOMENT_CELL_WIDTH + MOMENT_CELL_GAP), -rowOffsets[row])
+            cell:SetHeight(rowHeights[row])
+        end
+        self:SetHeight(height)
+        return height
+    end
+    return card, card:Reflow()
 end
 
 function ns:OpenSoundPicker(initialID, callback, suggestedCategory)
@@ -1052,6 +1124,7 @@ function ns:OpenSoundPicker(initialID, callback, suggestedCategory)
     self.SoundPicker:RefreshSounds()
     self.SoundPicker:Show()
     self.SoundPicker:Raise()
+    if self.TutorialSignal then self:TutorialSignal("sound-picker-opened", initialID) end
     local picker = self.SoundPicker
     local targetID = initialID
     local targetCategory = picker.category
@@ -1184,6 +1257,26 @@ function ns:CreateSoundSetWindow()
     setContent:SetWidth(448); setContent:SetHeight(386); setScroll:SetScrollChild(setContent)
     SkinScrollFrame(setScroll)
     window.rows = {}
+    local loadConfirmPanel
+    local function FinishSoundSetLoad(specID, setName)
+        if not ns:LoadSoundSet(specID, setName) then return end
+        if loadConfirmPanel then loadConfirmPanel:Hide() end
+        ns:RefreshOptions()
+        if ns.SoundSetWindow then ns.SoundSetWindow:Refresh() end
+    end
+    local function RequestSoundSetLoad(specID, setName)
+        if not ns:HasUnsavedProfileChanges(specID) then
+            FinishSoundSetLoad(specID, setName)
+            return
+        end
+        local store = ns:GetSpecProfileStore(specID)
+        local sourceName = store and store.loadedName or ns.SUPPORTED_SPECS[specID] or "working set"
+        loadConfirmPanel.specID = specID
+        loadConfirmPanel.setName = setName
+        loadConfirmPanel.message:SetText("Loading |cff9d7cff"..setName.."|r will replace unsaved changes to |cffffffff"..sourceName.."|r.")
+        loadConfirmPanel:Show()
+        loadConfirmPanel:Raise()
+    end
     function window:AcquireSetRow(index)
         if self.rows[index] then return self.rows[index] end
         local row=CreateFrame("Frame",nil,setContent,"BackdropTemplate")
@@ -1200,13 +1293,28 @@ function ns:CreateSoundSetWindow()
         row.delete:SetPoint("RIGHT",row.export,"LEFT",-6,0)
         row.overwrite=CreateButton(row,"Overwrite",78,function() ns:SaveSoundSet(window.specID,row.setName); window:Refresh(); ns:RefreshOptions() end)
         row.overwrite:SetPoint("RIGHT",row.delete,"LEFT",-6,0)
-        row.load=CreateButton(row,"Load",62,function() ns:LoadSoundSet(window.specID,row.setName); ns:RefreshOptions(); window:Refresh() end,true)
+        row.load=CreateButton(row,"Load",62,function() RequestSoundSetLoad(window.specID,row.setName) end,true)
         row.load:SetPoint("RIGHT",row.overwrite,"LEFT",-6,0)
         row.name:SetPoint("RIGHT", row.load, "LEFT", -8, 0)
         row.name:SetJustifyH("LEFT"); row.name:SetWordWrap(false)
         self.rows[index]=row
         return row
     end
+    loadConfirmPanel=CreateFrame("Frame",nil,window,"BackdropTemplate")
+    loadConfirmPanel:SetSize(390,146); loadConfirmPanel:SetPoint("CENTER"); loadConfirmPanel:SetFrameLevel(window:GetFrameLevel()+25)
+    loadConfirmPanel:EnableMouse(true); ApplyBackdrop(loadConfirmPanel,COLORS.card,COLORS.accent)
+    local loadConfirmTitle=CreateText(loadConfirmPanel,"GameFontNormalLarge","Unsaved changes")
+    loadConfirmTitle:SetPoint("TOPLEFT",16,-15)
+    loadConfirmPanel.message=CreateText(loadConfirmPanel,"GameFontHighlightSmall","")
+    loadConfirmPanel.message:SetPoint("TOPLEFT",16,-48); loadConfirmPanel.message:SetPoint("RIGHT",loadConfirmPanel,"RIGHT",-16,0)
+    loadConfirmPanel.message:SetJustifyH("LEFT"); loadConfirmPanel.message:SetWordWrap(true); loadConfirmPanel.message:SetTextColor(unpack(COLORS.muted))
+    local confirmLoad=CreateButton(loadConfirmPanel,"Load anyway",108,function()
+        FinishSoundSetLoad(loadConfirmPanel.specID,loadConfirmPanel.setName)
+    end,true)
+    confirmLoad:SetPoint("BOTTOMRIGHT",-16,13)
+    local cancelLoad=CreateButton(loadConfirmPanel,"Keep editing",100,function() loadConfirmPanel:Hide() end)
+    cancelLoad:SetPoint("RIGHT",confirmLoad,"LEFT",-8,0)
+    loadConfirmPanel:Hide(); window.loadConfirmPanel=loadConfirmPanel
     local namePanel=CreateFrame("Frame",nil,window,"BackdropTemplate")
     namePanel:SetSize(360,132); namePanel:SetPoint("CENTER"); namePanel:SetFrameLevel(window:GetFrameLevel()+20)
     namePanel:EnableMouse(true); ApplyBackdrop(namePanel,COLORS.card,COLORS.accent)
@@ -1221,6 +1329,7 @@ function ns:CreateSoundSetWindow()
         local saved, reason = ns:SaveSoundSet(window.specID,nameBox:GetText())
         if saved then
             namePanel:Hide(); window:Refresh(); ns:RefreshOptions()
+            if ns.TutorialSignal then ns:TutorialSignal("sound-set-saved", window.specID) end
         elseif reason == "builtin" then
             ns:Print("Built-in presets are protected. Choose a different name for your version."); nameBox:SetFocus()
         else
@@ -1234,6 +1343,7 @@ function ns:CreateSoundSetWindow()
     nameBox:SetScript("OnEnterPressed",CommitNewSoundSet)
     nameBox:SetScript("OnEscapePressed",function(self) self:ClearFocus(); namePanel:Hide() end)
     namePanel:Hide(); window.namePanel=namePanel
+    window.nameBox=nameBox; window.createNamed=createNamed; window.cancelNamed=cancelNamed
 
     local transfer=CreateFrame("Frame",nil,window,"BackdropTemplate")
     transfer:SetSize(450,310); transfer:SetPoint("CENTER"); transfer:SetFrameLevel(window:GetFrameLevel()+30)
@@ -1325,7 +1435,10 @@ function ns:CreateSoundSetWindow()
         for index,name in ipairs(names) do
             local row=self:AcquireSetRow(index); row.setName=name
             local builtin = store.savedSets[name] and store.savedSets[name].builtin == true
-            row.name:SetText((store.loadedName==name and "|cff35d1bd" or "|cff9d7cff")..name..(builtin and "  |cff747887Built-in|r" or "|r"))
+            local isLoaded = store.loadedName == name
+            local suffix = builtin and "  |cff747887Built-in|r" or "|r"
+            if isLoaded and store.dirty == true then suffix = suffix .. "  |cffffb84dModified|r" end
+            row.name:SetText((isLoaded and "|cff35d1bd" or "|cff9d7cff")..name..suffix)
             row.overwrite:SetShown(not builtin)
             row.delete:SetShown(not builtin)
             row:Show()
@@ -1335,13 +1448,17 @@ function ns:CreateSoundSetWindow()
         setScroll:UpdateScrollChildRect()
         if setScroll._resonanceUpdateScrollBar then setScroll._resonanceUpdateScrollBar() end
     end
-    window:SetScript("OnHide",function() namePanel:Hide(); transfer:Hide(); nameBox:ClearFocus() end)
+    window:SetScript("OnHide",function()
+        namePanel:Hide(); transfer:Hide(); loadConfirmPanel:Hide(); nameBox:ClearFocus()
+        if ns.TutorialSignal then ns:TutorialSignal("sound-sets-closed") end
+    end)
     window:Hide(); self.SoundSetWindow=window
     if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]=window:GetName() end
 end
 
 function ns:OpenSoundSetWindow(specID)
     self:CreateSoundSetWindow(); self.SoundSetWindow.specID=specID; self.SoundSetWindow:Refresh(); self.SoundSetWindow:Show(); self.SoundSetWindow:Raise()
+    if self.TutorialSignal then self:TutorialSignal("sound-sets-opened", specID) end
 end
 
 local function BuildSpecSection(content, specID, y)
@@ -1351,12 +1468,7 @@ local function BuildSpecSection(content, specID, y)
         if not groups[rule.spell] then groups[rule.spell]={}; order[#order+1]=rule.spell end
         groups[rule.spell][#groups[rule.spell]+1]=rule
     end
-    local height = 106
-    for _, spellName in ipairs(order) do
-        local cardHeight = GetSpellCardLayout(groups[spellName])
-        height = height + cardHeight + 4
-    end
-    local section = CreateSection(content, ns.SUPPORTED_SPECS[specID], "Curated presets, hero-tree and Apex moments. Every toggle is authoritative.", height)
+    local section = CreateSection(content, ns.SUPPORTED_SPECS[specID], "Curated presets, hero-tree and Apex moments. Every toggle is authoritative.", 106)
     section:SetPoint("TOPLEFT", 0, y)
     section:SetPoint("TOPRIGHT", 0, y)
 
@@ -1371,14 +1483,44 @@ local function BuildSpecSection(content, specID, y)
     currentSet:SetPoint("BOTTOMRIGHT", saveSets, "TOPRIGHT", 0, 3); currentSet:SetTextColor(unpack(COLORS.muted))
     RegisterOptionWidget({refresh=function()
         local store=ns:GetSpecProfileStore(specID)
-        currentSet:SetText(store and store.loadedName and ("Loaded: "..store.loadedName) or "Unsaved working set")
+        if store and store.loadedName then
+            local dirtyText = store.dirty == true and "  |cffffb84d• Unsaved changes|r" or ""
+            currentSet:SetText("Loaded: "..store.loadedName..dirtyText)
+        elseif store and store.dirty == true then
+            currentSet:SetText("|cffffb84dUnsaved working set|r")
+        else
+            currentSet:SetText("Working set")
+        end
     end})
 
+    section.spellCards = {}
+    section.ruleCells = {}
+    section.saveSets = saveSets
     local rowY = -100
     for _, spellName in ipairs(order) do
-        local _, cardHeight = CreateSpellCard(section, spellName, groups[spellName], rowY)
+        local card, cardHeight = CreateSpellCard(section, spellName, groups[spellName], rowY)
+        section.spellCards[#section.spellCards + 1] = card
+        for ruleID, cell in pairs(card.ruleCells or {}) do section.ruleCells[ruleID] = cell end
         rowY = rowY - cardHeight - 4
     end
+    function section:Reflow()
+        local nextY = -100
+        for _, card in ipairs(self.spellCards) do
+            card:ClearAllPoints()
+            card:SetPoint("TOPLEFT", 10, nextY)
+            card:SetPoint("TOPRIGHT", -10, nextY)
+            local cardHeight = card:Reflow()
+            nextY = nextY - cardHeight - 4
+        end
+        local sectionHeight = math.max(106, -nextY + 2)
+        self:SetHeight(sectionHeight)
+        if ns.SpecSectionBottom then ns.SpecSectionBottom[specID] = ns.SpecSectionY - sectionHeight - 10 end
+        if ns.SelectedOptionsSpec == specID and ns.OptionsContent then
+            ns.OptionsContent:SetHeight(-ns.SpecSectionBottom[specID] + 10)
+        end
+        return sectionHeight
+    end
+    local height = section:Reflow()
     return y - height - 10, section
 end
 
@@ -1488,6 +1630,8 @@ local function BuildSpecTabs(content, y)
     end
 
     ns.SpecTabs = tabs
+    tabs.buttonsBySpec = {}
+    for index, specID in ipairs(specs) do tabs.buttonsBySpec[specID] = buttons[index] end
     tabs:Reflow(content:GetWidth())
     return ns.SpecSectionY
 end
@@ -1631,6 +1775,10 @@ function ns:CreateOptions()
     creator:SetPoint("TOPRIGHT", version, "BOTTOMRIGHT", 0, -4)
     creator:SetTextColor(unpack(COLORS.muted))
 
+    local helpButton = CreateButton(header, "?  Help", 72, function() ns:OpenHelp() end)
+    helpButton:SetPoint("RIGHT", header, "RIGHT", -142, 0)
+    self.HelpButton = helpButton
+
     local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -12)
     scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 52)
@@ -1656,6 +1804,9 @@ function ns:CreateOptions()
         content:SetWidth(contentWidth)
         if ns.SpecTabs and ns.SpecTabs.Reflow then
             ns.SpecTabs:Reflow(contentWidth)
+        end
+        for _, section in pairs(ns.SpecSections or {}) do
+            if section.Reflow then section:Reflow() end
         end
     end)
 
@@ -1704,8 +1855,12 @@ function ns:CreateOptions()
     panel:SetScript("OnShow", function()
         panel:Raise()
         ns:ShowOptionsSpec(ns:GetCurrentOptionsSpec())
+        if ns.ResumeTutorialFromOptions then ns:ResumeTutorialFromOptions() end
     end)
-    panel:SetScript("OnHide", function() panel:StopMovingOrSizing() end)
+    panel:SetScript("OnHide", function()
+        panel:StopMovingOrSizing()
+        if ns.PauseTutorial then ns:PauseTutorial("options-hidden") end
+    end)
     panel:Hide()
     if UISpecialFrames then
         UISpecialFrames[#UISpecialFrames + 1] = panel:GetName()

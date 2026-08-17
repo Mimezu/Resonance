@@ -24,10 +24,6 @@ end
 
 -- Devastation: blue spellcraft and red-dragon force, with bronze reserved for
 -- time/Apex moments. Frequent fillers remain opt-in until Expressive.
-presets("dev_essence_burst",
-    config(false, layer(4612975)),
-    config(true,  layer(4612975)),
-    config(true,  layer(4612975), layer(5520066, 55)))
 presets("dev_fire_breath",
     config(true, layer(4569632)),
     config(true, layer(4569632), layer(4573362, 65)),
@@ -48,10 +44,6 @@ presets("dev_dragonrage",
     config(true, layer(4553204)),
     config(true, layer(4553204), layer(4569652, 85)),
     config(true, layer(4553204), layer(4569652, 80), layer(4555731, 135)))
-presets("dev_rising_fury",
-    config(false, layer(4569652)),
-    config(false, layer(4569652)),
-    config(true,  layer(4569652), layer(4686040, 90)))
 presets("audit12_dev_deep_breath",
     config(true, layer(4526046)),
     config(true, layer(4526046), layer(4569628, 90)),
@@ -182,10 +174,6 @@ presets("aug_upheaval_release",
     config(true, layer(4553587)),
     config(true, layer(4553587), layer(4577695, 80)),
     config(true, layer(4553587), layer(4577695, 75), layer(4555859, 125)))
-presets("aug_essence_burst",
-    config(false, layer(4558561)),
-    config(false, layer(4558561)),
-    config(true,  layer(4558561)))
 presets("audit12_aug_fire_breath",
     config(true, layer(4569632)),
     config(true, layer(4569632), layer(4573362, 65)),

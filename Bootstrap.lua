@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "1.10.0"
+ns.VERSION = "1.12.0"
 ns.COLOR = "|cff9d7cff"
 ns.SPEC_ORDER = {
     71, 72, 73,       -- Warrior
@@ -60,9 +60,9 @@ ns.SUPPORTED_SPECS = {
     [1468] = "Preservation Evoker",
     [1473] = "Augmentation Evoker",
 }
-ns.BUILTIN_SET_VERSION = 5
+ns.BUILTIN_SET_VERSION = 6
 ns.PROFILE_SCHEMA_VERSION = 1
-ns.RULE_CATALOG_VERSION = 1
+ns.RULE_CATALOG_VERSION = 2
 ns.SOUND_CATALOG_VERSION = 2
 ns.CURATED_PRESETS = {
     { key = "subtle", name = "Resonance Subtle" },
@@ -71,7 +71,7 @@ ns.CURATED_PRESETS = {
 }
 
 local DEFAULTS = {
-    version = 6,
+    version = 7,
     enabled = true,
     palette = "subtle",
     channel = "SFX",
@@ -90,6 +90,10 @@ local DEFAULTS = {
     },
     debug = false,
     soloMode = false,
+    tutorial = {
+        completedVersion = 0,
+        lastStep = 1,
+    },
 }
 
 for specID in pairs(ns.SUPPORTED_SPECS) do
@@ -97,7 +101,7 @@ for specID in pairs(ns.SUPPORTED_SPECS) do
 end
 
 local CHARACTER_DEFAULTS = {
-    version = 4,
+    version = 5,
     specs = {},
 }
 
@@ -105,7 +109,6 @@ ns.DEFAULTS = DEFAULTS
 ns.Runtime = {
     capabilities = { hasSpellID = {}, rankBySpellID = {} },
     activeRules = {},
-    auraInstances = {},
     lastRulePlay = {},
     refreshQueued = false,
     eventCounts = {},
@@ -294,6 +297,9 @@ end
 
 local ACCOUNT_MIGRATIONS = {
     [6] = function() end, -- Introduced ordered migrations and compatibility metadata.
+    [7] = function(database) -- Interactive tutorial progress; no profile data changes.
+        if type(database.tutorial) ~= "table" then database.tutorial = {} end
+    end,
 }
 
 local function RunOrderedMigrations(database, previousVersion, currentVersion, migrations)
@@ -542,6 +548,14 @@ local CHARACTER_STORE_MIGRATIONS = {
             NormalizeProfileSet(store.working, false)
         end
     end,
+    [5] = function(store)
+        -- Before v5, loadedName doubled as the dirty flag: every edit cleared
+        -- it. Preserve that meaning once, then keep the source set name and a
+        -- separate dirty bit from this version onward.
+        if type(store.dirty) ~= "boolean" then
+            store.dirty = store.loadedName == nil
+        end
+    end,
 }
 
 local function RunCharacterStoreMigrations(store, specID, previousVersion)
@@ -614,10 +628,11 @@ function ns:InitializeCharacterProfiles()
         local hasLegacyProfile = type(legacyProfile) == "table" and type(legacyProfile.rules) == "table"
             and next(legacyProfile.rules) ~= nil
         if type(store) ~= "table" then
-            store = { working = nil, savedSets = {}, loadedName = nil }
+            store = { working = nil, savedSets = {}, loadedName = nil, dirty = false }
             ResonanceCharDB.specs[specID] = store
         end
         if type(store.savedSets) ~= "table" then store.savedSets = {} end
+        if createdStore and type(store.dirty) ~= "boolean" then store.dirty = false end
         if type(store.working) ~= "table" then
             store.working = hasLegacyProfile and DeepCopy(legacyProfile) or { rules = {} }
         end
@@ -654,9 +669,10 @@ function ns:InitializeCharacterProfiles()
                 store.working = DeepCopy(store.savedSets["Resonance Medium"])
                 store.loadedName = "Resonance Medium"
             end
-        elseif refreshLoadedBuiltin then
-            -- Editing any layer clears loadedName, so this only refreshes an
-            -- untouched built-in preset and never overwrites custom work.
+        elseif refreshLoadedBuiltin and store.dirty ~= true then
+            -- Only refresh an untouched built-in preset. A working set with
+            -- edits keeps its current layers even when the bundled preset is
+            -- upgraded by a newer addon release.
             store.working = DeepCopy(store.savedSets[refreshLoadedBuiltin])
             store.loadedName = refreshLoadedBuiltin
         end
@@ -675,6 +691,16 @@ end
 function ns:GetActiveProfile(specID)
     local store = self:GetSpecProfileStore(specID)
     return store and store.working, store and store.loadedName
+end
+
+function ns:MarkSpecProfileDirty(specID)
+    local store = self:GetSpecProfileStore(specID)
+    if store then store.dirty = true end
+end
+
+function ns:HasUnsavedProfileChanges(specID)
+    local store = self:GetSpecProfileStore(specID)
+    return store and store.dirty == true or false
 end
 
 function ns:GetRuleConfig(ruleID, create)
@@ -769,8 +795,7 @@ function ns:AddRuleLayer(rule)
     config.layers = config.layers or {}
     config.layers[count + 1] = { enabled = false, soundID = false, delayMs = 0 }
     config.layerCount = count + 1
-    local store = self:GetSpecProfileStore(rule.spec)
-    if store then store.loadedName = nil end
+    self:MarkSpecProfileDirty(rule.spec)
     return true
 end
 
@@ -787,8 +812,7 @@ function ns:RemoveRuleLayer(rule, index)
     end
     table.remove(config.layers, index)
     config.layerCount = count - 1
-    local store = self:GetSpecProfileStore(rule.spec)
-    if store then store.loadedName = nil end
+    self:MarkSpecProfileDirty(rule.spec)
     return true
 end
 
@@ -802,8 +826,8 @@ function ns:SetLayerConfig(rule, index, values)
     if values.soundID ~= nil then layer.soundID = tonumber(values.soundID) end
     if values.clearSound then layer.soundID = false end
     if values.delayMs ~= nil then layer.delayMs = math.max(0, math.min(5000, math.floor(tonumber(values.delayMs) or 0))) end
-    local store = self:GetSpecProfileStore(rule.spec)
-    if store then store.loadedName = nil end
+    self:MarkSpecProfileDirty(rule.spec)
+    self:QueueRefresh("layer")
 end
 
 function ns:SaveSoundSet(specID, name)
@@ -828,6 +852,7 @@ function ns:SaveSoundSet(specID, name)
     store.savedSets[name].savedAt = GetServerTime and GetServerTime() or 0
     store.working = DeepCopy(store.savedSets[name])
     store.loadedName = name
+    store.dirty = false
     self:QueueRefresh("sound set saved")
     return true
 end
@@ -837,6 +862,7 @@ function ns:LoadSoundSet(specID, name)
     if not store or type(store.savedSets[name]) ~= "table" then return false end
     store.working = DeepCopy(store.savedSets[name])
     store.loadedName = name
+    store.dirty = false
     self:QueueRefresh("sound set loaded")
     return true
 end
@@ -846,7 +872,10 @@ function ns:DeleteSoundSet(specID, name)
     if not store or not store.savedSets[name] then return false end
     if store.savedSets[name].builtin == true then return false, "builtin" end
     store.savedSets[name] = nil
-    if store.loadedName == name then store.loadedName = nil end
+    if store.loadedName == name then
+        store.loadedName = nil
+        store.dirty = true
+    end
     return true
 end
 
@@ -1180,8 +1209,7 @@ function ns:SetRuleEnabled(ruleID, enabled)
     else
         config.enabled = enabled == rule.defaultOn and nil or (enabled and true or false)
     end
-    local store = self:GetSpecProfileStore(rule.spec)
-    if store then store.loadedName = nil end
+    self:MarkSpecProfileDirty(rule.spec)
     self:QueueRefresh("rule")
 end
 

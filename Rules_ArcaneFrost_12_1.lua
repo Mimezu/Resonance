@@ -22,8 +22,7 @@ local rules = {
     { id="arcane_presence_of_mind_12_1", spec=62, spell="Presence of Mind", moment="Cast", event="SUCCEEDED", spellIDs={205025}, preset="expressive", cooldown=2, defaultOn=false,
       defaultSounds={5259954}, defaultDelays={0}, description="Optional movement/instant-cast setup cue." },
 
-    -- Frost Mage (64): current Frostfire/Spellslinger core casts plus the
-    -- current Apex/proc IDs from the 12.1 client data.
+    -- Frost Mage (64): current Frostfire/Spellslinger direct player casts.
     { id="frost_frostbolt_12_1", spec=64, spell="Frostbolt", moment="Cast", event="SUCCEEDED", spellIDs={116}, preset="expressive", cooldown=1.2, defaultOn=false,
       defaultSounds={4612975}, defaultDelays={0}, description="Optional Frostbolt filler accent." },
     { id="frost_frostfire_bolt_12_1", spec=64, spell="Frostfire Bolt", moment="Cast", event="SUCCEEDED", spellIDs={431044}, capability="frostfire", preset="medium", cooldown=1.1, defaultOn=true,
@@ -36,12 +35,6 @@ local rules = {
       defaultSounds={4613005,568047}, defaultDelays={0,70}, description="A committed Comet Storm release; individual comets remain silent." },
     { id="frost_blizzard_12_1", spec=64, spell="Blizzard", moment="Cast", event="SUCCEEDED", spellIDs={190356}, preset="expressive", cooldown=1.2, defaultOn=false,
       defaultSounds={4612975}, defaultDelays={0}, description="Optional AoE hard-cast accent." },
-    { id="frost_hand_of_frost_12_1", spec=64, spell="Hand of Frost (Apex)", moment="Ready", event="AURA", auraIDs={1262935,1262981,1263249,1263263}, capability="handOfFrost", preset="subtle", cooldown=5, defaultOn=true,
-      defaultSounds={4612975,5259954}, defaultDelays={0,90}, description="Apex: one cue when Hand of Frost becomes active." },
-    { id="frost_brain_freeze_12_1", spec=64, spell="Brain Freeze", moment="Ready", event="AURA", auraIDs={190447}, preset="expressive", cooldown=1.2, defaultOn=false,
-      defaultSounds={5259954}, defaultDelays={0}, description="Current 12.1 Brain Freeze proc ID; disabled by default because it can be frequent." },
-    { id="frost_fingers_12_1", spec=64, spell="Fingers of Frost", moment="Ready", event="AURA", auraIDs={112965}, preset="expressive", cooldown=1.2, defaultOn=false,
-      defaultSounds={5259954}, defaultDelays={0}, description="Current 12.1 Fingers of Frost proc ID; disabled by default because it can be frequent." },
 }
 
 for _, rule in ipairs(rules) do
