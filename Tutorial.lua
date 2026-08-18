@@ -156,6 +156,7 @@ local function CreateOverlay()
     coach:SetFrameLevel(root:GetFrameLevel() + 10)
     coach:EnableMouse(true)
     UI.ApplyBackdrop(coach, { 0.035, 0.04, 0.065, 0.99 }, COLORS.accent)
+    UI.AddArcaneTrim(coach, "window")
     Tutorial.coach = coach
 
     coach.progress = UI.CreateText(coach, "GameFontHighlightSmall", "")

@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "1.13.0"
+ns.VERSION = "1.14.0"
 ns.COLOR = "|cff9d7cff"
 ns.SPEC_ORDER = {
     71, 72, 73,       -- Warrior
@@ -101,7 +101,7 @@ for specID in pairs(ns.SUPPORTED_SPECS) do
 end
 
 local CHARACTER_DEFAULTS = {
-    version = 5,
+    version = 7,
     specs = {},
 }
 
@@ -559,6 +559,18 @@ local CHARACTER_STORE_MIGRATIONS = {
             store.dirty = store.loadedName == nil
         end
     end,
+    [6] = function(store)
+        -- The personal set name is created lazily on the first edit.
+        -- Keep older character/spec stores untouched until then.
+        if store.autoSaveName ~= nil and type(store.autoSaveName) ~= "string" then
+            store.autoSaveName = nil
+        end
+    end,
+    [7] = function(store)
+        -- v7 replaces rolling auto-saves with one first-edit personal set.
+        -- Existing automatic rows are reused and refreshed on that first edit.
+        store.personalSetInitialized = false
+    end,
 }
 
 local function RunCharacterStoreMigrations(store, specID, previousVersion)
@@ -696,9 +708,81 @@ function ns:GetActiveProfile(specID)
     return store and store.working, store and store.loadedName
 end
 
+local function GetPersonalSetBaseName()
+    local character, realm
+    if UnitFullName then character, realm = UnitFullName("player") end
+    character = type(character) == "string" and character ~= "" and character
+        or (UnitName and UnitName("player"))
+    realm = type(realm) == "string" and realm ~= "" and realm
+        or (GetRealmName and GetRealmName())
+    if type(character) == "string" and character ~= "" and type(realm) == "string" and realm ~= "" then
+        return character .. " — " .. realm
+    end
+    return type(character) == "string" and character ~= "" and character or "My Resonance Set"
+end
+
+local function PrepareSavedSnapshot(owner, source, specID, automatic)
+    local snapshot = DeepCopy(source)
+    FreezeProfileSet(snapshot, specID, true)
+    NormalizeProfileSet(snapshot, false)
+    snapshot.builtin = nil
+    snapshot.builtinVersion = nil
+    snapshot.baseVersion = nil
+    snapshot.preset = nil
+    snapshot.ruleFallback = "disabled"
+    snapshot.schemaVersion = owner.PROFILE_SCHEMA_VERSION
+    snapshot.ruleCatalogVersion = owner.RULE_CATALOG_VERSION
+    snapshot.soundCatalogVersion = owner.SOUND_CATALOG_VERSION
+    snapshot.savedAt = GetServerTime and GetServerTime() or 0
+    snapshot.automatic = automatic == true or nil
+    return snapshot
+end
+
+local function GetAutomaticSetName(store)
+    local preferred = GetPersonalSetBaseName()
+    local name = type(store.autoSaveName) == "string" and store.autoSaveName or preferred
+    local existing = store.savedSets and store.savedSets[name]
+    if existing and existing.automatic ~= true then
+        name = preferred .. " (Auto)"
+        local suffix = 2
+        while store.savedSets[name] and store.savedSets[name].automatic ~= true do
+            name = preferred .. " (Auto " .. suffix .. ")"
+            suffix = suffix + 1
+        end
+    end
+    store.autoSaveName = name
+    return name
+end
+
+local function CreatePersonalSet(owner, store, specID, replaceSnapshot)
+    local name = GetAutomaticSetName(store)
+    if replaceSnapshot == true or type(store.savedSets[name]) ~= "table" then
+        store.savedSets[name] = PrepareSavedSnapshot(owner, store.working, specID, true)
+    end
+    store.personalSetInitialized = true
+    return name
+end
+
 function ns:MarkSpecProfileDirty(specID)
     local store = self:GetSpecProfileStore(specID)
-    if store then store.dirty = true end
+    if not store or type(store.working) ~= "table" then return end
+
+    local loaded = store.loadedName and store.savedSets[store.loadedName]
+    -- Presets are sources, never editable destinations. The first change to a
+    -- bundled preset immediately moves the edited working copy under the
+    -- character's personal set, without overwriting that saved personal set.
+    if store.personalSetInitialized ~= true or not store.loadedName or (loaded and loaded.builtin == true) then
+        local personalName = CreatePersonalSet(self, store, specID, store.personalSetInitialized ~= true)
+        store.loadedName = personalName
+    end
+    -- Later edits are deliberately not written into the active set until the
+    -- player chooses Save changes.
+    store.dirty = true
+
+    local window = self.SoundSetWindow
+    if window and window:IsShown() and window.specID == specID and type(window.Refresh) == "function" then
+        window:Refresh()
+    end
 end
 
 function ns:HasUnsavedProfileChanges(specID)
@@ -840,24 +924,26 @@ function ns:SaveSoundSet(specID, name)
     if store.savedSets[name] and store.savedSets[name].builtin == true then
         return false, "builtin"
     end
-    local snapshot = DeepCopy(store.working)
-    FreezeProfileSet(snapshot, specID, true)
-    NormalizeProfileSet(snapshot, false)
-    store.savedSets[name] = snapshot
-    store.savedSets[name].builtin = nil
-    store.savedSets[name].builtinVersion = nil
-    store.savedSets[name].baseVersion = nil
-    store.savedSets[name].preset = nil
-    store.savedSets[name].ruleFallback = "disabled"
-    store.savedSets[name].schemaVersion = self.PROFILE_SCHEMA_VERSION
-    store.savedSets[name].ruleCatalogVersion = self.RULE_CATALOG_VERSION
-    store.savedSets[name].soundCatalogVersion = self.SOUND_CATALOG_VERSION
-    store.savedSets[name].savedAt = GetServerTime and GetServerTime() or 0
+    store.savedSets[name] = PrepareSavedSnapshot(self, store.working, specID, name == store.autoSaveName)
     store.working = DeepCopy(store.savedSets[name])
     store.loadedName = name
     store.dirty = false
     self:QueueRefresh("sound set saved")
     return true
+end
+
+-- Commits the visible working copy without ever trying to overwrite a
+-- protected bundled preset. The first edit has already created an active
+-- personal set, so this normally writes directly into that set.
+function ns:SaveActiveSoundSet(specID)
+    local store = self:GetSpecProfileStore(specID)
+    if not store then return false end
+    local loaded = store.loadedName and store.savedSets[store.loadedName]
+    if loaded and loaded.builtin ~= true then
+        return self:SaveSoundSet(specID, store.loadedName)
+    end
+    local personalName = CreatePersonalSet(self, store, specID, true)
+    return self:SaveSoundSet(specID, personalName)
 end
 
 function ns:LoadSoundSet(specID, name)
@@ -870,10 +956,30 @@ function ns:LoadSoundSet(specID, name)
     return true
 end
 
+function ns:RenameSoundSet(specID, oldName, newName)
+    local store = self:GetSpecProfileStore(specID)
+    oldName = type(oldName) == "string" and oldName or ""
+    newName = type(newName) == "string" and newName:match("^%s*(.-)%s*$") or ""
+    if not store or oldName == "" or newName == "" then return false, "empty" end
+    local set = store.savedSets and store.savedSets[oldName]
+    if type(set) ~= "table" then return false, "missing" end
+    if set.builtin == true then return false, "builtin" end
+    if oldName == newName then return true end
+    if store.savedSets[newName] ~= nil then return false, "exists" end
+
+    store.savedSets[newName] = set
+    store.savedSets[oldName] = nil
+    if store.loadedName == oldName then store.loadedName = newName end
+    if store.autoSaveName == oldName then store.autoSaveName = newName end
+    self:QueueRefresh("sound set renamed")
+    return true
+end
+
 function ns:DeleteSoundSet(specID, name)
     local store = self:GetSpecProfileStore(specID)
     if not store or not store.savedSets[name] then return false end
     if store.savedSets[name].builtin == true then return false, "builtin" end
+    if store.savedSets[name].automatic == true then return false, "automatic" end
     store.savedSets[name] = nil
     if store.loadedName == name then
         store.loadedName = nil
@@ -892,7 +998,10 @@ function ns:GetSoundSetNames(specID)
         ["Resonance Expressive"] = 3,
     }
     table.sort(names, function(left, right)
-        local leftOrder, rightOrder = presetOrder[left], presetOrder[right]
+        local leftSet = store and store.savedSets and store.savedSets[left]
+        local rightSet = store and store.savedSets and store.savedSets[right]
+        local leftOrder = presetOrder[left] or (leftSet and leftSet.automatic == true and 4)
+        local rightOrder = presetOrder[right] or (rightSet and rightSet.automatic == true and 4)
         if leftOrder or rightOrder then
             return (leftOrder or 99) < (rightOrder or 99)
         end

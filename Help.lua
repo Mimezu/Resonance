@@ -32,12 +32,12 @@ local TOPICS = {
     {
         title = "Save & share",
         summary = "Sets belong to a character/spec",
-        body = "Your working set is saved automatically as you edit, but it is not a named snapshot.\n\nUse |cff9d7cffPresets / saved sets|r to create or overwrite a named set. Sets are stored for this character and specialization. Export a set to share its code; import a friend's code on the matching spec. Built-in presets cannot be overwritten.",
+        body = "Your first edit creates and activates a |cff35d1bdPersonal set|r named for your character and realm. It starts with that first edit, but does not update itself after that.\n\nBuilt-in presets are read-only starting points: changing one immediately switches the edited copy to your Personal set. After any change, that active set is marked |cffffb84dChanged|r. Choose |cff9d7cffSave changes|r to write your current sounds into it. If you choose another set while it is Changed, Resonance warns you first so you can save or keep editing. Export a set to share it; import a friend's code on the matching spec.",
     },
     {
         title = "Safety & limits",
         summary = "What the addon deliberately avoids",
-        body = "Resonance listens only to confirmed player spell events. It does not automate gameplay or track blocked combat information such as cooldown-ready, proc, or resource-gain events.\n\nIt uses sounds already installed with WoW. The Solo added sounds option is an audition tool and may leave rare game dialogue audible.",
+        body = "Resonance listens only to confirmed player spell events. It does not automate gameplay or track blocked combat information such as cooldown-ready, proc, or resource-gain events.\n\nIt uses sounds already installed with WoW. The Solo added sounds option is an audition tool.",
     },
 }
 
@@ -58,6 +58,7 @@ function ns:CreateHelpWindow()
     window:SetClampedToScreen(true)
     window:EnableMouse(true)
     UI.ApplyBackdrop(window, { 0.035, 0.04, 0.065, 0.99 }, COLORS.accent)
+    UI.AddArcaneTrim(window, "window")
     self.HelpWindow = window
 
     local close = UI.CreateCloseButton(window)
@@ -80,6 +81,7 @@ function ns:CreateHelpWindow()
     rail:SetPoint("BOTTOMLEFT", 18, 62)
     rail:SetWidth(190)
     UI.ApplyBackdrop(rail, { 0.055, 0.06, 0.09, 0.96 }, COLORS.border)
+    UI.AddArcaneTrim(rail, "panel")
     window.topicButtons = {}
     for index, topic in ipairs(TOPICS) do
         local button = UI.CreateButton(rail, topic.title, 174, function() window:ShowTopic(index) end)
@@ -101,6 +103,7 @@ function ns:CreateHelpWindow()
     content:SetPoint("TOPLEFT", rail, "TOPRIGHT", 12, 0)
     content:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -18, 62)
     UI.ApplyBackdrop(content, { 0.075, 0.075, 0.115, 0.96 }, COLORS.border)
+    UI.AddArcaneTrim(content, "section")
     content.title = UI.CreateText(content, "GameFontNormalHuge", "")
     content.title:SetPoint("TOPLEFT", 22, -22)
     content.title:SetTextColor(unpack(COLORS.teal))

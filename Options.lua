@@ -10,6 +10,17 @@ local COLORS = {
     muted = { 0.62, 0.64, 0.72, 1 },
 }
 
+local WHITE = "Interface\\Buttons\\WHITE8X8"
+
+-- The catalog editor is deliberately tucked away for the 1.14 release.
+-- Keep both the SavedVariables and implementation intact: switching this
+-- flag back on restores a tester's existing draft instead of losing it.
+local DEBUG_SOUND_TOOLS_VISIBLE = false
+
+local function IsSoundSortingDebugActive()
+    return DEBUG_SOUND_TOOLS_VISIBLE and ns.DB and ns.DB.soundSortDebug == true
+end
+
 local PurpleButtonFont = CreateFont("ResonancePurpleButtonFont")
 PurpleButtonFont:CopyFontObject(GameFontNormal)
 PurpleButtonFont:SetTextColor(0.61, 0.46, 1.0, 1)
@@ -22,12 +33,21 @@ MutedButtonFont:SetTextColor(0.62, 0.64, 0.72, 1)
 
 local function ApplyBackdrop(frame, color, border)
     frame:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        bgFile = WHITE,
+        edgeFile = WHITE,
         edgeSize = 1,
     })
     frame:SetBackdropColor(unpack(color))
     frame:SetBackdropBorderColor(unpack(border or COLORS.border))
+end
+
+-- Borders have one owner: the frame's Backdrop. Earlier decorative strips
+-- overlapped the ScrollFrame and left visually open corners at large scales.
+-- Keep this shared hook intentionally quiet so existing callers retain a
+-- single, clean perimeter without stacked artwork.
+local function AddArcaneTrim(frame, style)
+    if not frame or frame._resonanceArcaneTrim then return end
+    frame._resonanceArcaneTrim = true
 end
 
 -- Replace UIPanelScrollFrameTemplate's large arrows and Blizzard artwork with
@@ -53,10 +73,10 @@ local function SkinScrollFrame(scroll)
     local track = CreateFrame("Button", nil, scroll:GetParent(), "BackdropTemplate")
     track:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 5, 0)
     track:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 5, 0)
-    track:SetWidth(12)
+    track:SetWidth(10)
     track:SetFrameLevel(scroll:GetFrameLevel() + 8)
     track:EnableMouse(true)
-    ApplyBackdrop(track, { 0.025, 0.03, 0.05, 0.78 }, { 0.20, 0.15, 0.34, 0.65 })
+    ApplyBackdrop(track, { 0.025, 0.03, 0.05, 0.28 }, { 0, 0, 0, 0 })
 
     local rail = track:CreateTexture(nil, "BACKGROUND")
     rail:SetTexture("Interface\\Buttons\\WHITE8X8")
@@ -394,6 +414,7 @@ local function CreateSection(parent, title, subtitle, height)
     local frame = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     frame:SetHeight(height)
     ApplyBackdrop(frame, COLORS.card)
+    AddArcaneTrim(frame, "section")
 
     local titleText = CreateText(frame, "GameFontNormalLarge", title)
     titleText:SetPoint("TOPLEFT", 14, -11)
@@ -420,22 +441,24 @@ ns.UI = {
     CreateButton = CreateButton,
     CreateCloseButton = CreateCloseButton,
     CreateSection = CreateSection,
+    AddArcaneTrim = AddArcaneTrim,
 }
 
 local function CreateCheckRow(parent, label, description, getter, setter)
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(350, 40)
+    local hasDescription = description and description ~= ""
+    row:SetSize(350, hasDescription and 40 or 26)
     local check = CreateModernCheck(row, 19)
     check:SetPoint("LEFT", 0, 0)
     row.label = CreateText(row, "GameFontNormal", label)
-    row.label:SetPoint("LEFT", check, "RIGHT", 10, 7)
+    row.label:SetPoint("LEFT", check, "RIGHT", 10, hasDescription and 7 or 0)
     row.description = CreateText(row, "GameFontHighlightSmall", description or "")
     row.description:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -2)
     row.description:SetPoint("RIGHT", row, "RIGHT", 0, 0)
     row.description:SetJustifyH("LEFT")
     row.description:SetWordWrap(true)
     if row.description.SetMaxLines then row.description:SetMaxLines(2) end
-    row.description:SetTextColor(unpack(COLORS.muted))
+    row.description:SetTextColor(unpack(COLORS.muted)); row.description:SetShown(hasDescription)
     check.getter = getter
     check:SetScript("OnClick", function(self)
         setter(self:GetChecked() == true)
@@ -517,6 +540,7 @@ function ns:CreateSoundPicker()
     picker:SetClampedToScreen(true)
     picker:EnableMouse(true)
     ApplyBackdrop(picker, COLORS.panel, COLORS.accent)
+    AddArcaneTrim(picker, "window")
     self.SoundPicker = picker
     picker.selectedIDs = {}
     picker:SetScript("OnHide", function()
@@ -568,6 +592,7 @@ function ns:CreateSoundPicker()
     local categoryPane = CreateFrame("Frame", nil, picker, "BackdropTemplate")
     categoryPane:SetPoint("TOPLEFT", 14, -66); categoryPane:SetPoint("BOTTOMLEFT", 14, 54); categoryPane:SetWidth(148)
     ApplyBackdrop(categoryPane, COLORS.cardAlt)
+    AddArcaneTrim(categoryPane, "panel")
     picker.categoryPane = categoryPane
     local categoryScroll = CreateFrame("ScrollFrame", nil, categoryPane, "UIPanelScrollFrameTemplate")
     categoryScroll:SetPoint("TOPLEFT", 5, -5)
@@ -679,7 +704,7 @@ function ns:CreateSoundPicker()
     end
 
     function picker:BeginSoundDrag(button)
-        if not ns.DB.soundSortDebug or not button.sound then return end
+        if not IsSoundSortingDebugActive() or not button.sound then return end
         if not self.selectedIDs[button.sound.id] then self:SelectOnly(button.sound.id) end
         self.dragIDs = self:GetSelectedSoundIDs(true)
         if #self.dragIDs == 0 then return end
@@ -742,7 +767,7 @@ function ns:CreateSoundPicker()
         end)
         button:SetScript("OnClick", function(self)
             if not self.sound then return end
-            if ns.DB.soundSortDebug then
+            if IsSoundSortingDebugActive() then
                 if IsControlKeyDown and IsControlKeyDown() then
                     picker.selectedIDs[self.sound.id] = not picker.selectedIDs[self.sound.id] or nil
                     if picker.selectedIDs[self.sound.id] then
@@ -793,7 +818,7 @@ function ns:CreateSoundPicker()
             button.sound = sound
             if sound then
                 local marked = ns:IsSoundMarkedForDelete(sound.id)
-                local selected = ns.DB.soundSortDebug and self.selectedIDs[sound.id] == true
+                local selected = IsSoundSortingDebugActive() and self.selectedIDs[sound.id] == true
                 local moved = ns.DB.categoryDraft[sound.id] ~= nil
                 local color = marked and "|cffffa0aa" or (selected and "|cff35d1bd" or "|cff9d7cff")
                 button.label:SetText(color .. sound.label .. "|r")
@@ -807,7 +832,7 @@ function ns:CreateSoundPicker()
                     button:SetBackdropBorderColor(unpack(COLORS.teal))
                 elseif moved then
                     button:SetBackdropBorderColor(0.96, 0.66, 0.16, 1)
-                elseif not ns.DB.soundSortDebug and self.pendingID == sound.id then
+                elseif not IsSoundSortingDebugActive() and self.pendingID == sound.id then
                     button:SetBackdropBorderColor(unpack(COLORS.teal))
                 else
                     button:SetBackdropBorderColor(0.16, 0.17, 0.24, 1)
@@ -824,15 +849,15 @@ function ns:CreateSoundPicker()
         self:RefreshCategoryButtons()
         self.selection:SetText(self.pendingID and ns:GetSoundLabel(self.pendingID) or "No sound selected")
         self.favorite:SetText(self.pendingID and ns.DB.favorites[self.pendingID] and "Unfavorite" or "Favorite")
-        local selectedIDs = self:GetSelectedSoundIDs(not ns.DB.soundSortDebug)
+        local selectedIDs = self:GetSelectedSoundIDs(not IsSoundSortingDebugActive())
         local allMarked = #selectedIDs > 0
         for _, soundID in ipairs(selectedIDs) do
             if not ns:IsSoundMarkedForDelete(soundID) then allMarked = false break end
         end
         self.deleteMark:SetText(allMarked and ("Undelete selected (" .. #selectedIDs .. ")") or ("Mark selected for delete (" .. #selectedIDs .. ")"))
-        self.deleteMark:SetShown(ns.DB.soundSortDebug and #selectedIDs > 0)
-        self.selection:SetShown(not ns.DB.soundSortDebug)
-        self.help:SetText(ns.DB.soundSortDebug
+        self.deleteMark:SetShown(IsSoundSortingDebugActive() and #selectedIDs > 0)
+        self.selection:SetShown(not IsSoundSortingDebugActive())
+        self.help:SetText(IsSoundSortingDebugActive()
             and "Sorting: click • Ctrl-click multi • drag to category • green selected • gold moved • red delete • save in main footer."
             or "Choose a sound family or search every source, then click a swatch to hear it. Nothing is committed until OK.")
     end
@@ -914,15 +939,15 @@ function ns:CreateSoundPicker()
     picker:Hide()
 end
 
-local MOMENT_CELL_WIDTH = 328
-local MOMENT_CELL_GAP = 4
-local MOMENT_CONTENT_LEFT = 168
-local SOUND_SWATCH_WIDTH = 208
+local MOMENT_CELL_WIDTH = 344
+local MOMENT_CELL_GAP = 10
+local MOMENT_CONTENT_LEFT = 152
+local SOUND_SWATCH_WIDTH = 218
 local DELAY_FIELD_WIDTH = 50
 local MOMENT_LAYER_HEIGHT = 24
 
 local function GetMomentCellHeight(rule)
-    return 94 + math.max(0, ns:GetRuleLayerCount(rule) - 2) * MOMENT_LAYER_HEIGHT
+    return 98 + math.max(0, ns:GetRuleLayerCount(rule) - 2) * MOMENT_LAYER_HEIGHT
 end
 
 local function GetMomentColumns(cardWidth, momentCount)
@@ -945,7 +970,9 @@ end
 local function CreateMomentCell(parent, rule, cellHeight)
     local cell = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     cell:SetSize(MOMENT_CELL_WIDTH, cellHeight)
+    if cell.SetClipsChildren then cell:SetClipsChildren(true) end
     ApplyBackdrop(cell, COLORS.panel, { 0.12, 0.13, 0.19, 1 })
+    AddArcaneTrim(cell, "moment")
     cell.rule = rule
     cell.layerChecks = {}
     cell.swatches = {}
@@ -960,16 +987,19 @@ local function CreateMomentCell(parent, rule, cellHeight)
     cell.enabled = enabled
 
     local title = CreateText(cell, "GameFontNormalSmall", rule.moment)
-    title:SetPoint("LEFT", enabled, "RIGHT", 4, 0)
-    title:SetPoint("RIGHT", cell, "RIGHT", -28, 0)
+    title:SetPoint("TOPLEFT", enabled, "TOPRIGHT", 5, -1)
+    title:SetPoint("RIGHT", cell, "RIGHT", -34, 0)
     title:SetJustifyH("LEFT")
     title:SetWordWrap(false)
     title:SetTextColor(unpack(COLORS.teal))
-    local hearAdded = CreateButton(cell, "", 20, function()
+
+    local hearAdded = CreateButton(cell, "", 23, function()
         ns:PlayRule(rule, true)
         if ns.TutorialSignal then ns:TutorialSignal("moment-previewed", rule.id) end
     end, true)
     hearAdded:SetPoint("TOPRIGHT", -4, -3)
+    hearAdded:SetBackdropColor(0.42, 0.27, 0.04, 1)
+    hearAdded:SetBackdropBorderColor(0.96, 0.66, 0.16, 0.95)
     local playIcon = hearAdded:CreateTexture(nil, "ARTWORK")
     playIcon:SetSize(12, 12)
     playIcon:SetPoint("CENTER", 1, 0)
@@ -1000,6 +1030,8 @@ local function CreateMomentCell(parent, rule, cellHeight)
     end)
     hearAdded:SetScript("OnLeave", GameTooltip_Hide)
     cell.preview = hearAdded
+
+    AddTooltip(hearAdded, "Preview added sounds", "Plays this moment's enabled Resonance layers and their delays. It does not play Blizzard's original spell sound.")
 
     local function LayerLine(layerIndex, y)
         local layerCheck = CreateModernCheck(cell, 15)
@@ -1063,7 +1095,7 @@ local function CreateMomentCell(parent, rule, cellHeight)
         end
     end
     for layerIndex = 1, ns:GetRuleLayerCount(rule) do
-        LayerLine(layerIndex, -25 - (layerIndex - 1) * MOMENT_LAYER_HEIGHT)
+        LayerLine(layerIndex, -31 - (layerIndex - 1) * MOMENT_LAYER_HEIGHT)
     end
     local addLayer = CreateButton(cell, "+ layer", 54, function()
         if ns:AddRuleLayer(rule) then
@@ -1076,17 +1108,75 @@ local function CreateMomentCell(parent, rule, cellHeight)
     addLayer:SetEnabled(ns:GetRuleLayerCount(rule) < ns.MAX_RULE_LAYERS)
     AddTooltip(addLayer, "Add sound layer", "Adds another independently selectable sound and delay. Up to " .. ns.MAX_RULE_LAYERS .. " layers per moment.")
     cell.addLayer = addLayer
+    function cell:ResizeForCard(width, height)
+        self:SetSize(width, height)
+        for layerIndex, swatch in ipairs(self.swatches) do
+            -- A lone moment should use the full row instead of leaving a
+            -- second, empty card beside it. The delay and optional remove
+            -- control stay fixed; the sound name gets the remaining width.
+            local trailingWidth = self.removeButtons[layerIndex] and 105 or 84
+            swatch:SetWidth(math.max(SOUND_SWATCH_WIDTH, width - trailingWidth))
+        end
+    end
     return cell
+end
+
+local function ResolveSpellIcon(spellRules)
+    for _, rule in ipairs(spellRules or {}) do
+        for _, spellID in ipairs(rule.spellIDs or {}) do
+            if C_Spell and C_Spell.GetSpellTexture then
+                local ok, texture = pcall(C_Spell.GetSpellTexture, spellID)
+                if ok and texture then return texture end
+            end
+            if C_Spell and C_Spell.GetSpellInfo then
+                local ok, info = pcall(C_Spell.GetSpellInfo, spellID)
+                if ok and info and info.iconID then return info.iconID end
+            end
+            if GetSpellTexture then
+                local ok, texture = pcall(GetSpellTexture, spellID)
+                if ok and texture then return texture end
+            end
+        end
+    end
+    return "Interface\\Icons\\INV_Misc_QuestionMark"
 end
 
 local function CreateSpellCard(parent, spellName, spellRules, y)
     local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     card:SetPoint("TOPLEFT", 10, y); card:SetPoint("TOPRIGHT", -10, y); card:SetHeight(80)
+    if card.SetClipsChildren then card:SetClipsChildren(true) end
     ApplyBackdrop(card, COLORS.cardAlt, {0.16,0.17,0.24,1})
-    local name = CreateText(card, "GameFontNormal", spellName)
-    name:SetPoint("TOPLEFT", 12, -15); name:SetPoint("RIGHT", card, "LEFT", 156, 0); name:SetJustifyH("LEFT")
-    local count = CreateText(card, "GameFontHighlightSmall", #spellRules .. (#spellRules == 1 and " moment" or " moments"))
-    count:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -4); count:SetTextColor(unpack(COLORS.muted))
+
+    local rail = CreateFrame("Frame", nil, card, "BackdropTemplate")
+    rail:SetPoint("TOPLEFT", 4, -4)
+    rail:SetPoint("BOTTOMLEFT", 4, 4)
+    rail:SetWidth(MOMENT_CONTENT_LEFT - 14)
+    ApplyBackdrop(rail, { 0.035, 0.04, 0.065, 0.88 }, { 0.18, 0.13, 0.30, 0.90 })
+
+    local identity = CreateFrame("Frame", nil, rail)
+    identity:SetSize(math.max(104, MOMENT_CONTENT_LEFT - 34), 100)
+    identity:SetPoint("TOP", rail, "TOP", 0, -10)
+
+    local iconFrame = CreateFrame("Frame", nil, identity, "BackdropTemplate")
+    iconFrame:SetSize(40, 40)
+    iconFrame:SetPoint("TOPLEFT", 0, 0)
+    ApplyBackdrop(iconFrame, { 0.015, 0.02, 0.035, 1 }, COLORS.accent)
+    local spellIcon = iconFrame:CreateTexture(nil, "ARTWORK")
+    spellIcon:SetPoint("TOPLEFT", 3, -3)
+    spellIcon:SetPoint("BOTTOMRIGHT", -3, 3)
+    spellIcon:SetTexture(ResolveSpellIcon(spellRules))
+    spellIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    card.spellIcon = spellIcon
+
+    local name = CreateText(identity, "GameFontNormal", spellName)
+    name:SetPoint("TOPLEFT", iconFrame, "BOTTOMLEFT", 0, -7)
+    name:SetPoint("RIGHT", identity, "RIGHT", 0, 0)
+    name:SetJustifyH("LEFT")
+    name:SetWordWrap(true)
+    local count = CreateText(identity, "GameFontHighlightSmall", #spellRules .. (#spellRules == 1 and " moment" or " moments"))
+    count:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -3)
+    count:SetTextColor(unpack(COLORS.muted))
+    count:SetJustifyH("LEFT")
     card.momentCells = {}
     card.ruleCells = {}
     for index, rule in ipairs(spellRules) do
@@ -1101,9 +1191,13 @@ local function CreateSpellCard(parent, spellName, spellRules, y)
         for index, cell in ipairs(self.momentCells) do
             local column = (index - 1) % columns
             local row = math.floor((index - 1) / columns) + 1
+            local firstInRow = (row - 1) * columns + 1
+            local momentsInRow = math.min(columns, #spellRules - firstInRow + 1)
+            local availableWidth = math.max(MOMENT_CELL_WIDTH, self:GetWidth() - MOMENT_CONTENT_LEFT - 12)
+            local cellWidth = (availableWidth - (momentsInRow - 1) * MOMENT_CELL_GAP) / momentsInRow
             cell:ClearAllPoints()
-            cell:SetPoint("TOPLEFT", MOMENT_CONTENT_LEFT + column * (MOMENT_CELL_WIDTH + MOMENT_CELL_GAP), -rowOffsets[row])
-            cell:SetHeight(rowHeights[row])
+            cell:SetPoint("TOPLEFT", MOMENT_CONTENT_LEFT + column * (cellWidth + MOMENT_CELL_GAP), -rowOffsets[row])
+            cell:ResizeForCard(cellWidth, rowHeights[row])
         end
         self:SetHeight(height)
         return height
@@ -1116,7 +1210,7 @@ function ns:OpenSoundPicker(initialID, callback, suggestedCategory)
     local sound = initialID and self.SoundByID[initialID]
     self.SoundPicker.pendingID = initialID
     wipe(self.SoundPicker.selectedIDs)
-    if self.DB.soundSortDebug and initialID then self.SoundPicker.selectedIDs[initialID] = true end
+    if IsSoundSortingDebugActive() and initialID then self.SoundPicker.selectedIDs[initialID] = true end
     self.SoundPicker.callback = callback
     self.SoundPicker.category = (sound and self:GetEffectiveSoundCategory(sound)) or suggestedCategory or "arcane"
     self.SoundPicker.search:SetText("")
@@ -1145,119 +1239,89 @@ function ns:RefreshOptions()
         end
     end
 
-    if self.StatusText then
-        local specID = self.Runtime.specID
-        local specName = self.SUPPORTED_SPECS[specID] or "Unsupported specialization"
-        local hero = specID and self:GetHeroTreeLabel(specID) or "Not detected"
-        local apex = specID and self:GetApexLabel(specID) or "Not detected"
-        local active = #(self.Runtime.activeRules or {})
-        self.StatusText:SetText(string.format(
-            "|cffffffff%s|r\n|cff9d7cff%s|r  •  Apex: %s\n|cff35d1bd%d active sound rules|r",
-            specName, hero, apex, active
-        ))
-    end
 end
 
 local function BuildGeneral(content, y)
-    local section = CreateSection(content, "Experience", "Compact global controls. Spell sounds and delays live below.", 176)
+    local section = CreateSection(content, "Experience", nil, 140)
     section:SetPoint("TOPLEFT", 0, y)
     section:SetPoint("TOPRIGHT", 0, y)
 
-    local enabled = CreateCheckRow(section, "Enable Resonance", "Master switch; never changes WoW's own sounds.",
+    local enabled = CreateCheckRow(section, "Enable Resonance", nil,
         function() return ns.DB.enabled end,
         function(value) ns.DB.enabled = value ns:QueueRefresh("master") end)
-    enabled:SetPoint("TOPLEFT", 14, -46)
+    enabled:SetPoint("TOPLEFT", 14, -39)
     enabled:SetWidth(270)
 
-    local minimap = CreateCheckRow(section, "Show minimap button", "The Addon Compartment entry remains available when hidden.",
+    local minimap = CreateCheckRow(section, "Show minimap button", nil,
         function() return not ns.DB.minimap.hide end,
         function(value) ns.DB.minimap.hide = not value ns:UpdateMinimapButton() end)
-    minimap:SetPoint("TOPLEFT", 14, -86)
+    minimap:SetPoint("TOPLEFT", 14, -69)
     minimap:SetWidth(270)
 
-    local debug = CreateCheckRow(section, "Diagnostic messages", "Print cue and refresh information to chat while testing.",
-        function() return ns.DB.debug end,
-        function(value) ns.DB.debug = value end)
-    debug:SetPoint("TOPLEFT", 300, -46)
-    debug:SetWidth(300)
-
-    local solo = CreateCheckRow(section, "Solo added sounds", "Routes Resonance to Dialog and temporarily mutes SFX, music and ambience. Rare game dialogue may remain.",
+    local solo = CreateCheckRow(section, "Solo added sounds", "Routes Resonance to Dialog and temporarily mutes SFX, music and ambience.",
         function() return ns.DB.soloMode end,
         function(value) ns:SetSoloMode(value) end)
-    solo:SetPoint("TOPLEFT", 300, -86)
+    solo:SetPoint("TOPLEFT", 300, -39)
     solo:SetWidth(300)
 
-    local sorting = CreateCheckRow(section, "Debug: Sound sorting mode", "Temporary workspace: multi-select sounds, drag them between categories, stage deletions, then save from the main footer.",
-        function() return ns.DB.soundSortDebug end,
-        function(value)
-            ns.DB.soundSortDebug=value
-            if ns.SoundPicker and ns.SoundPicker:IsShown() then ns.SoundPicker:RefreshSounds() end
-            ns:RefreshOptions()
-        end)
-    sorting:SetPoint("TOPLEFT", 14, -126)
-    sorting:SetWidth(270)
+    if DEBUG_SOUND_TOOLS_VISIBLE then
+        local debug = CreateCheckRow(section, "Diagnostic messages", "Print cue and refresh information to chat while testing.",
+            function() return ns.DB.debug end,
+            function(value) ns.DB.debug = value end)
+        debug:SetPoint("TOPLEFT", 300, -82)
+        debug:SetWidth(300)
 
-    local presets = CreateButton(section, "Choose sound preset", 206, function()
-        ns:OpenSoundSetWindow(ns.SelectedOptionsSpec or ns.Runtime.specID or ns.SPEC_ORDER[1])
-    end, true)
-    presets:SetPoint("TOPRIGHT", -14, -42)
-    AddTooltip(presets, "Curated sound presets", "Load Subtle, Medium, or Expressive for the selected specialization. After loading, every spell toggle remains fully independent.")
+        local sorting = CreateCheckRow(section, "Debug: Sound sorting mode", "Move sounds, stage deletions, then save from the footer.",
+            function() return ns.DB.soundSortDebug end,
+            function(value)
+                ns.DB.soundSortDebug=value
+                if ns.SoundPicker and ns.SoundPicker:IsShown() then ns.SoundPicker:RefreshSounds() end
+                ns:RefreshOptions()
+            end)
+        sorting:SetPoint("TOPLEFT", 14, -98)
+        sorting:SetWidth(270)
+    end
 
     local channel = CreateCycle(section, "Audio channel", {
         { value = "SFX", label = "SFX (recommended)" },
         { value = "Dialog", label = "Dialog" },
         { value = "Master", label = "Master" },
     }, function() return ns.DB.channel end, function(value) ns.DB.channel = value end, 206)
-    channel:SetPoint("TOPRIGHT", -14, -88)
+    channel:SetPoint("TOPRIGHT", -14, -35)
 
     local library = CreateButton(section, "Open sound library", 206, function()
         ns:OpenSoundPicker(nil, function() end, "bronze")
     end, true)
-    library:SetPoint("TOPRIGHT", -14, -130)
+    library:SetPoint("TOPRIGHT", -14, -90)
     AddTooltip(library, "Sound library", "Audition the curated WoW spell assets. Pickers opened from a spell moment also save your choice.")
 
-    return y - 186
-end
-
-local function BuildStatus(content, y)
-    local section = CreateSection(content, "Live capability audit", "Active specialization, hero tree, Apex and working sound set.", 88)
-    section:SetPoint("TOPLEFT", 0, y)
-    section:SetPoint("TOPRIGHT", 0, y)
-
-    ns.StatusText = CreateText(section, "GameFontHighlight", "")
-    ns.StatusText:SetPoint("TOPLEFT", 14, -43)
-    ns.StatusText:SetJustifyH("LEFT")
-
-    local refresh = CreateButton(section, "Refresh audit", 120, function() ns:QueueRefresh("manual audit") end, true)
-    refresh:SetPoint("BOTTOMRIGHT", -14, 12)
-    local report = CreateButton(section, "Print report", 110, function() ns:PrintAudit() end)
-    report:SetPoint("RIGHT", refresh, "LEFT", -8, 0)
-    return y - 98
+    return y - 150
 end
 
 function ns:CreateSoundSetWindow()
     if self.SoundSetWindow then return end
     local window = CreateFrame("Frame", "ResonanceSoundSetWindow", UIParent, "BackdropTemplate")
-    window:SetSize(500, 510); window:SetPoint("CENTER"); window:SetFrameStrata("TOOLTIP"); window:SetFrameLevel(920)
+    window:SetSize(610, 510); window:SetPoint("CENTER"); window:SetFrameStrata("TOOLTIP"); window:SetFrameLevel(920)
     window:SetToplevel(true); window:SetMovable(true); window:SetClampedToScreen(true); window:EnableMouse(true)
     ApplyBackdrop(window, COLORS.panel, COLORS.accent)
+    AddArcaneTrim(window, "window")
     local close = CreateCloseButton(window)
     close:SetPoint("TOPRIGHT", -8, -8)
     local title = CreateText(window, "GameFontNormalLarge", "Sound sets"); title:SetPoint("TOPLEFT", 18, -16)
-    local subtitle = CreateText(window, "GameFontHighlightSmall", "Saved only for this character and specialization.")
+    local subtitle = CreateText(window, "GameFontHighlightSmall", "Editing a preset switches you to your personal set. Save changes updates that set.")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4); subtitle:SetTextColor(unpack(COLORS.muted))
     local drag = CreateFrame("Frame", nil, window); drag:SetPoint("TOPLEFT"); drag:SetPoint("TOPRIGHT"); drag:SetHeight(50)
     drag:EnableMouse(true); drag:RegisterForDrag("LeftButton")
     drag:SetScript("OnDragStart", function() window:StartMoving() end); drag:SetScript("OnDragStop", function() window:StopMovingOrSizing() end)
-    window.empty = CreateText(window, "GameFontHighlight", "No saved sets yet. Create one from your current sounds.")
+    window.empty = CreateText(window, "GameFontHighlight", "Your personal set appears here after your first edit.")
     window.empty:SetPoint("CENTER", 0, 20); window.empty:SetTextColor(unpack(COLORS.muted))
     local setScroll=CreateFrame("ScrollFrame",nil,window)
     setScroll:SetPoint("TOPLEFT",18,-66); setScroll:SetPoint("BOTTOMRIGHT",-34,58)
     local setContent=CreateFrame("Frame",nil,setScroll)
-    setContent:SetWidth(448); setContent:SetHeight(386); setScroll:SetScrollChild(setContent)
+    setContent:SetWidth(558); setContent:SetHeight(386); setScroll:SetScrollChild(setContent)
     SkinScrollFrame(setScroll)
     window.rows = {}
-    local loadConfirmPanel
+    local loadConfirmPanel, namePanel, nameBox, OpenNamePanel
     local function FinishSoundSetLoad(specID, setName)
         if not ns:LoadSoundSet(specID, setName) then return end
         if loadConfirmPanel then loadConfirmPanel:Hide() end
@@ -1273,16 +1337,23 @@ function ns:CreateSoundSetWindow()
         local sourceName = store and store.loadedName or ns.SUPPORTED_SPECS[specID] or "working set"
         loadConfirmPanel.specID = specID
         loadConfirmPanel.setName = setName
-        loadConfirmPanel.message:SetText("Loading |cff9d7cff"..setName.."|r will replace unsaved changes to |cffffffff"..sourceName.."|r.")
+        loadConfirmPanel.message:SetText("Using |cff9d7cff"..setName.."|r will replace the unsaved edits to |cffffffff"..sourceName.."|r. Save changes first if you want to keep them.")
         loadConfirmPanel:Show()
         loadConfirmPanel:Raise()
     end
     function window:AcquireSetRow(index)
         if self.rows[index] then return self.rows[index] end
         local row=CreateFrame("Frame",nil,setContent,"BackdropTemplate")
-        row:SetHeight(34); row:SetPoint("TOPLEFT",0,-(index-1)*39); row:SetPoint("TOPRIGHT",0,-(index-1)*39)
+        row:SetHeight(44); row:SetPoint("TOPLEFT",0,-(index-1)*49); row:SetPoint("TOPRIGHT",0,-(index-1)*49)
         ApplyBackdrop(row,COLORS.cardAlt,{0.16,0.17,0.24,1})
-        row.name=CreateText(row,"GameFontNormal",""); row.name:SetPoint("LEFT",10,0)
+        row.name=CreateText(row,"GameFontNormal",""); row.name:SetPoint("TOPLEFT",10,-7)
+        row.status=CreateText(row,"GameFontHighlightSmall",""); row.status:SetPoint("BOTTOMLEFT",10,6)
+        row.status:SetTextColor(unpack(COLORS.muted)); row.status:SetJustifyH("LEFT"); row.status:SetWordWrap(false)
+        row.rename=CreateFrame("Button",nil,row)
+        row.rename:EnableMouse(true)
+        row.rename:SetScript("OnClick",function()
+            if row.isBuiltin ~= true and OpenNamePanel then OpenNamePanel("rename", row.setName) end
+        end)
         row.export=CreateButton(row,"Export",54,function()
             local exportText, reason = ns:ExportSoundSet(window.specID, row.setName)
             if exportText then window.transfer:OpenExport(row.setName, exportText)
@@ -1291,49 +1362,62 @@ function ns:CreateSoundSetWindow()
         row.export:SetPoint("RIGHT",-8,0)
         row.delete=CreateButton(row,"×",28,function() ns:DeleteSoundSet(window.specID,row.setName); window:Refresh(); ns:RefreshOptions() end)
         row.delete:SetPoint("RIGHT",row.export,"LEFT",-6,0)
-        row.overwrite=CreateButton(row,"Overwrite",78,function() ns:SaveSoundSet(window.specID,row.setName); window:Refresh(); ns:RefreshOptions() end)
+        row.overwrite=CreateButton(row,"Save changes",96,function() ns:SaveActiveSoundSet(window.specID); window:Refresh(); ns:RefreshOptions() end)
         row.overwrite:SetPoint("RIGHT",row.delete,"LEFT",-6,0)
-        row.load=CreateButton(row,"Load",62,function() RequestSoundSetLoad(window.specID,row.setName) end,true)
+        row.load=CreateButton(row,"Use",62,function() RequestSoundSetLoad(window.specID,row.setName) end,true)
         row.load:SetPoint("RIGHT",row.overwrite,"LEFT",-6,0)
+        row.rename:SetPoint("TOPLEFT",8,-3); row.rename:SetPoint("BOTTOMRIGHT",row.load,"LEFT",-6,3)
         row.name:SetPoint("RIGHT", row.load, "LEFT", -8, 0)
+        row.status:SetPoint("RIGHT", row.load, "LEFT", -8, 0)
         row.name:SetJustifyH("LEFT"); row.name:SetWordWrap(false)
+        AddTooltip(row.rename, "Rename set", "Click the set name to rename this personal or saved set. Built-in presets cannot be renamed.")
+        AddTooltip(row.load, "Use this set", "Replaces the current working sounds with this saved set. Save changes first if the active set is marked Changed.")
+        AddTooltip(row.overwrite, "Save changes", "Updates the active set with the changes you have made.")
+        AddTooltip(row.delete, "Delete set", "Deletes this named set. Your first personal set and built-in presets are protected.")
         self.rows[index]=row
         return row
     end
     loadConfirmPanel=CreateFrame("Frame",nil,window,"BackdropTemplate")
     loadConfirmPanel:SetSize(390,146); loadConfirmPanel:SetPoint("CENTER"); loadConfirmPanel:SetFrameLevel(window:GetFrameLevel()+25)
     loadConfirmPanel:EnableMouse(true); ApplyBackdrop(loadConfirmPanel,COLORS.card,COLORS.accent)
-    local loadConfirmTitle=CreateText(loadConfirmPanel,"GameFontNormalLarge","Unsaved changes")
+    local loadConfirmTitle=CreateText(loadConfirmPanel,"GameFontNormalLarge","Switch sound set?")
     loadConfirmTitle:SetPoint("TOPLEFT",16,-15)
     loadConfirmPanel.message=CreateText(loadConfirmPanel,"GameFontHighlightSmall","")
     loadConfirmPanel.message:SetPoint("TOPLEFT",16,-48); loadConfirmPanel.message:SetPoint("RIGHT",loadConfirmPanel,"RIGHT",-16,0)
     loadConfirmPanel.message:SetJustifyH("LEFT"); loadConfirmPanel.message:SetWordWrap(true); loadConfirmPanel.message:SetTextColor(unpack(COLORS.muted))
-    local confirmLoad=CreateButton(loadConfirmPanel,"Load anyway",108,function()
+    local confirmLoad=CreateButton(loadConfirmPanel,"Use this set",108,function()
         FinishSoundSetLoad(loadConfirmPanel.specID,loadConfirmPanel.setName)
     end,true)
     confirmLoad:SetPoint("BOTTOMRIGHT",-16,13)
     local cancelLoad=CreateButton(loadConfirmPanel,"Keep editing",100,function() loadConfirmPanel:Hide() end)
     cancelLoad:SetPoint("RIGHT",confirmLoad,"LEFT",-8,0)
     loadConfirmPanel:Hide(); window.loadConfirmPanel=loadConfirmPanel
-    local namePanel=CreateFrame("Frame",nil,window,"BackdropTemplate")
+    namePanel=CreateFrame("Frame",nil,window,"BackdropTemplate")
     namePanel:SetSize(360,132); namePanel:SetPoint("CENTER"); namePanel:SetFrameLevel(window:GetFrameLevel()+20)
     namePanel:EnableMouse(true); ApplyBackdrop(namePanel,COLORS.card,COLORS.accent)
     local nameTitle=CreateText(namePanel,"GameFontNormalLarge","Name this sound set")
     nameTitle:SetPoint("TOPLEFT",16,-14)
-    local nameHelp=CreateText(namePanel,"GameFontHighlightSmall","Save the current sounds and delays for this specialization.")
+    local nameHelp=CreateText(namePanel,"GameFontHighlightSmall","Create another named copy of your current sounds. Your first personal set stays protected.")
     nameHelp:SetPoint("TOPLEFT",nameTitle,"BOTTOMLEFT",0,-3); nameHelp:SetTextColor(unpack(COLORS.muted))
-    local nameBox=CreateFrame("EditBox",nil,namePanel,"BackdropTemplate")
+    nameBox=CreateFrame("EditBox",nil,namePanel,"BackdropTemplate")
     nameBox:SetSize(328,24); nameBox:SetPoint("TOPLEFT",16,-58); nameBox:SetAutoFocus(false); nameBox:SetMaxLetters(32)
     nameBox:SetFontObject("GameFontHighlight"); nameBox:SetTextInsets(8,8,0,0); ApplyBackdrop(nameBox,COLORS.panel,COLORS.border)
     local function CommitNewSoundSet()
-        local saved, reason = ns:SaveSoundSet(window.specID,nameBox:GetText())
+        local saved, reason
+        if namePanel.mode == "rename" then
+            saved, reason = ns:RenameSoundSet(window.specID, namePanel.sourceName, nameBox:GetText())
+        else
+            saved, reason = ns:SaveSoundSet(window.specID,nameBox:GetText())
+        end
         if saved then
             namePanel:Hide(); window:Refresh(); ns:RefreshOptions()
             if ns.TutorialSignal then ns:TutorialSignal("sound-set-saved", window.specID) end
         elseif reason == "builtin" then
             ns:Print("Built-in presets are protected. Choose a different name for your version."); nameBox:SetFocus()
+        elseif reason == "exists" then
+            ns:Print("A sound set already uses that name."); nameBox:SetFocus()
         else
-            ns:Print("Please enter a sound set name."); nameBox:SetFocus()
+            ns:Print("Please enter a unique sound set name."); nameBox:SetFocus()
         end
     end
     local createNamed=CreateButton(namePanel,"Create",92,CommitNewSoundSet,true)
@@ -1342,6 +1426,23 @@ function ns:CreateSoundSetWindow()
     cancelNamed:SetPoint("RIGHT",createNamed,"LEFT",-7,0)
     nameBox:SetScript("OnEnterPressed",CommitNewSoundSet)
     nameBox:SetScript("OnEscapePressed",function(self) self:ClearFocus(); namePanel:Hide() end)
+    OpenNamePanel = function(mode, sourceName)
+        namePanel.mode = mode
+        namePanel.sourceName = sourceName
+        if mode == "rename" then
+            nameTitle:SetText("Rename sound set")
+            nameHelp:SetText("This changes the set name only. Its sounds and settings stay exactly the same.")
+            createNamed:SetText("Rename")
+            nameBox:SetText(sourceName or "")
+            nameBox:HighlightText()
+        else
+            nameTitle:SetText("Name this sound set")
+            nameHelp:SetText("Create another named copy of your current sounds. Your first personal set stays protected.")
+            createNamed:SetText("Create")
+            nameBox:SetText("")
+        end
+        namePanel:Show(); namePanel:Raise(); nameBox:SetFocus()
+    end
     namePanel:Hide(); window.namePanel=namePanel
     window.nameBox=nameBox; window.createNamed=createNamed; window.cancelNamed=cancelNamed
 
@@ -1423,9 +1524,7 @@ function ns:CreateSoundSetWindow()
     transfer:SetScript("OnHide",function() textBox:ClearFocus() end)
     transfer:Hide(); window.transfer=transfer
 
-    window.create=CreateButton(window,"Create new set",138,function()
-        nameBox:SetText(""); namePanel:Show(); namePanel:Raise(); nameBox:SetFocus()
-    end,true)
+    window.create=CreateButton(window,"Save as new set",138,function() OpenNamePanel("create") end,true)
     window.create:SetPoint("BOTTOMLEFT",18,16)
     window.import=CreateButton(window,"Import new set",138,function() transfer:OpenImport() end)
     window.import:SetPoint("LEFT",window.create,"RIGHT",8,0)
@@ -1434,17 +1533,40 @@ function ns:CreateSoundSetWindow()
         local store=ns:GetSpecProfileStore(self.specID)
         for index,name in ipairs(names) do
             local row=self:AcquireSetRow(index); row.setName=name
-            local builtin = store.savedSets[name] and store.savedSets[name].builtin == true
+            local savedSet = store.savedSets[name]
+            local builtin = savedSet and savedSet.builtin == true
+            local automatic = savedSet and savedSet.automatic == true
             local isLoaded = store.loadedName == name
-            local suffix = builtin and "  |cff747887Built-in|r" or "|r"
-            if isLoaded and store.dirty == true then suffix = suffix .. "  |cffffb84dModified|r" end
-            row.name:SetText((isLoaded and "|cff35d1bd" or "|cff9d7cff")..name..suffix)
-            row.overwrite:SetShown(not builtin)
-            row.delete:SetShown(not builtin)
+            local status, statusColor
+            if isLoaded and store.dirty == true then
+                status, statusColor = "Changed · click Save changes to update this set", {0.96,0.66,0.16,1}
+            elseif automatic then
+                status, statusColor = isLoaded and "Personal set · active" or "Personal set · created on your first edit", COLORS.teal
+            elseif builtin then
+                status, statusColor = "Built-in preset", COLORS.muted
+            elseif isLoaded then
+                status, statusColor = "Active named set", COLORS.teal
+            else
+                status, statusColor = "Saved named set", COLORS.muted
+            end
+            row.name:SetText((isLoaded and "|cff35d1bd" or "|cff9d7cff")..name)
+            row.status:SetText(status); row.status:SetTextColor(unpack(statusColor))
+            row.isBuiltin = builtin
+            row.rename:SetShown(not builtin)
+            row.load:SetText(isLoaded and "Active" or "Use")
+            row.load:SetEnabled(not isLoaded)
+            row.overwrite:SetShown(isLoaded and store.dirty == true)
+            row.delete:SetShown(not builtin and not automatic and not isLoaded)
+            if isLoaded then
+                local border = store.dirty == true and {0.96,0.66,0.16,1} or COLORS.teal
+                ApplyBackdrop(row, COLORS.cardAlt, border)
+            else
+                ApplyBackdrop(row, COLORS.cardAlt, {0.16,0.17,0.24,1})
+            end
             row:Show()
         end
         for index=#names+1,#self.rows do self.rows[index]:Hide() end
-        setContent:SetHeight(math.max(setScroll:GetHeight(),#names*39))
+        setContent:SetHeight(math.max(setScroll:GetHeight(),#names*49))
         setScroll:UpdateScrollChildRect()
         if setScroll._resonanceUpdateScrollBar then setScroll._resonanceUpdateScrollBar() end
     end
@@ -1468,26 +1590,34 @@ local function BuildSpecSection(content, specID, y)
         if not groups[rule.spell] then groups[rule.spell]={}; order[#order+1]=rule.spell end
         groups[rule.spell][#groups[rule.spell]+1]=rule
     end
-    local section = CreateSection(content, ns.SUPPORTED_SPECS[specID], "Curated presets, hero-tree and Apex moments. Every toggle is authoritative.", 106)
+    local section = CreateSection(content, ns.SUPPORTED_SPECS[specID], nil, 84)
     section:SetPoint("TOPLEFT", 0, y)
     section:SetPoint("TOPRIGHT", 0, y)
 
-    local specToggle = CreateCheckRow(section, "Enable this specialization", "The addon is dormant when this is disabled.",
+    local specToggle = CreateCheckRow(section, "Enable this specialization", nil,
         function() return ns.DB.specEnabled[specID] end,
         function(value) ns.DB.specEnabled[specID] = value ns:QueueRefresh("spec toggle") end)
-    specToggle:SetPoint("TOPLEFT", 10, -42)
+    specToggle:SetPoint("TOPLEFT", 10, -32)
 
     local saveSets = CreateButton(section, "Presets / saved sets", 180, function() ns:OpenSoundSetWindow(specID) end, true)
-    saveSets:SetPoint("TOPRIGHT", -14, -57)
+    saveSets:SetPoint("TOPRIGHT", -14, -49)
     local currentSet = CreateText(section, "GameFontHighlightSmall", "")
     currentSet:SetPoint("BOTTOMRIGHT", saveSets, "TOPRIGHT", 0, 3); currentSet:SetTextColor(unpack(COLORS.muted))
     RegisterOptionWidget({refresh=function()
         local store=ns:GetSpecProfileStore(specID)
         if store and store.loadedName then
-            local dirtyText = store.dirty == true and "  |cffffb84d• Unsaved changes|r" or ""
-            currentSet:SetText("Loaded: "..store.loadedName..dirtyText)
+            local activeSet = store.savedSets and store.savedSets[store.loadedName]
+            if store.dirty == true then
+                currentSet:SetText("Editing: "..store.loadedName.."  |cffffb84d• Save changes|r")
+            elseif activeSet and activeSet.automatic == true then
+                currentSet:SetText("|cff35d1bdPersonal set: "..store.loadedName.."|r")
+            elseif activeSet and activeSet.builtin == true then
+                currentSet:SetText("Built-in preset: "..store.loadedName)
+            else
+                currentSet:SetText("Active set: "..store.loadedName)
+            end
         elseif store and store.dirty == true then
-            currentSet:SetText("|cffffb84dUnsaved working set|r")
+            currentSet:SetText("|cffffb84dChanged · Save changes|r")
         else
             currentSet:SetText("Working set")
         end
@@ -1496,7 +1626,7 @@ local function BuildSpecSection(content, specID, y)
     section.spellCards = {}
     section.ruleCells = {}
     section.saveSets = saveSets
-    local rowY = -100
+    local rowY = -86
     for _, spellName in ipairs(order) do
         local card, cardHeight = CreateSpellCard(section, spellName, groups[spellName], rowY)
         section.spellCards[#section.spellCards + 1] = card
@@ -1504,7 +1634,7 @@ local function BuildSpecSection(content, specID, y)
         rowY = rowY - cardHeight - 4
     end
     function section:Reflow()
-        local nextY = -100
+        local nextY = -86
         for _, card in ipairs(self.spellCards) do
             card:ClearAllPoints()
             card:SetPoint("TOPLEFT", 10, nextY)
@@ -1512,7 +1642,7 @@ local function BuildSpecSection(content, specID, y)
             local cardHeight = card:Reflow()
             nextY = nextY - cardHeight - 4
         end
-        local sectionHeight = math.max(106, -nextY + 2)
+        local sectionHeight = math.max(84, -nextY + 2)
         self:SetHeight(sectionHeight)
         if ns.SpecSectionBottom then ns.SpecSectionBottom[specID] = ns.SpecSectionY - sectionHeight - 10 end
         if ns.SelectedOptionsSpec == specID and ns.OptionsContent then
@@ -1549,8 +1679,9 @@ local function BuildSpecTabs(content, y)
     tabs._topY = y
     tabs:SetPoint("TOPLEFT",0,y); tabs:SetPoint("TOPRIGHT",0,y)
     ApplyBackdrop(tabs,COLORS.card)
+    AddArcaneTrim(tabs, "panel")
     for index,specID in ipairs(specs) do
-        local button=CreateFrame("Button",nil,tabs,"BackdropTemplate"); button:SetSize(32,32)
+        local button=CreateFrame("Button",nil,tabs,"BackdropTemplate"); button:SetSize(30,30)
         buttons[index] = button
         ApplyBackdrop(button,COLORS.cardAlt,COLORS.border)
         local icon=button:CreateTexture(nil,"ARTWORK"); icon:SetPoint("TOPLEFT",3,-3); icon:SetPoint("BOTTOMRIGHT",-3,3)
@@ -1575,7 +1706,7 @@ local function BuildSpecTabs(content, y)
     end
 
     local expand = CreateFrame("Button", nil, tabs, "BackdropTemplate")
-    expand:SetSize(32, 32)
+    expand:SetSize(30, 30)
     ApplyBackdrop(expand, COLORS.cardAlt, COLORS.border)
     local gridOffsets = { {-5, 5}, {5, 5}, {-5, -5}, {5, -5} }
     for _, offset in ipairs(gridOffsets) do
@@ -1602,15 +1733,15 @@ local function BuildSpecTabs(content, y)
         end
         visible[#visible + 1] = expand
 
-        local columns = math.max(1, math.min(#visible, math.floor((availableWidth - 20) / 40)))
+        local columns = math.max(1, math.min(#visible, math.floor((availableWidth - 20) / 36)))
         local rows = math.ceil(#visible / columns)
-        local height = rows * 38 + 8
+        local height = rows * 34 + 8
         self:SetHeight(height)
         for index, button in ipairs(visible) do
             local column = (index - 1) % columns
             local row = math.floor((index - 1) / columns)
             button:ClearAllPoints()
-            button:SetPoint("TOPLEFT", 10 + column * 40, -5 - row * 38)
+            button:SetPoint("TOPLEFT", 10 + column * 36, -4 - row * 34)
         end
         expand:SetBackdropBorderColor(unpack(self._expanded and COLORS.teal or COLORS.border))
         expand:SetBackdropColor(unpack(self._expanded and {0.10, 0.20, 0.20, 1} or COLORS.cardAlt))
@@ -1711,7 +1842,7 @@ function ns:CreateOptions()
 
     local panel = CreateFrame("Frame", "ResonanceOptionsPanel", UIParent, "BackdropTemplate")
     local uiWidth, uiHeight = UIParent:GetSize()
-    panel:SetSize(math.min(920, uiWidth - 50), math.min(730, uiHeight - 50))
+    panel:SetSize(math.min(1260, uiWidth - 40), math.min(760, uiHeight - 40))
     panel:SetPoint("CENTER")
     panel:SetFrameStrata("FULLSCREEN_DIALOG")
     panel:SetFrameLevel(500)
@@ -1725,6 +1856,7 @@ function ns:CreateOptions()
         panel:SetResizeBounds(minimumWidth, 540, math.max(minimumWidth, uiWidth - 20), math.max(540, uiHeight - 20))
     end
     ApplyBackdrop(panel, COLORS.panel, COLORS.border)
+    AddArcaneTrim(panel, "window")
     self.OptionsPanel = panel
     -- Keep a partially constructed panel invisible if a future widget errors.
     panel:Hide()
@@ -1748,8 +1880,9 @@ function ns:CreateOptions()
     local header = CreateFrame("Frame", nil, panel, "BackdropTemplate")
     header:SetPoint("TOPLEFT", 12, -12)
     header:SetPoint("TOPRIGHT", -12, -12)
-    header:SetHeight(68)
+    header:SetHeight(76)
     ApplyBackdrop(header, { 0.085, 0.055, 0.14, 1 }, COLORS.accent)
+    AddArcaneTrim(header, "header")
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function() panel:StartMoving() end)
@@ -1783,7 +1916,7 @@ function ns:CreateOptions()
     scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -12)
     scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 52)
     local content = CreateFrame("Frame", nil, scroll)
-    content:SetWidth(860)
+    content:SetWidth(math.max(760, panel:GetWidth() - 50))
     scroll:SetScrollChild(content)
     SkinScrollFrame(scroll)
     self.OptionsContent=content
@@ -1791,7 +1924,6 @@ function ns:CreateOptions()
 
     local y = 0
     y = BuildGeneral(content, y)
-    y = BuildStatus(content, y)
     y = BuildSpecTabs(content,y)
     self.SpecSections={}; self.SpecSectionBottom={}
     self.SpecSectionY=y
@@ -1799,7 +1931,8 @@ function ns:CreateOptions()
     self:EnsureOptionsSpec(self.SelectedOptionsSpec)
     self.SpecSections[self.SelectedOptionsSpec]:Show()
     content:SetHeight(-self.SpecSectionBottom[self.SelectedOptionsSpec]+10)
-    scroll:SetScript("OnSizeChanged", function(_, width)
+    local function ReflowContentWidth(width)
+        if not width or width <= 0 then width = panel:GetWidth() - 50 end
         local contentWidth = math.max(760, width - 8)
         content:SetWidth(contentWidth)
         if ns.SpecTabs and ns.SpecTabs.Reflow then
@@ -1808,53 +1941,71 @@ function ns:CreateOptions()
         for _, section in pairs(ns.SpecSections or {}) do
             if section.Reflow then section:Reflow() end
         end
-    end)
-
-    local preview = CreateButton(panel, "Sound library", 132, function() ns:OpenSoundPicker(nil, function() end, "arcane") end, true)
-    preview:SetPoint("BOTTOMLEFT", 18, 14)
-    local reset = CreateButton(panel, "Reset defaults", 120, function()
-        StaticPopup_Show("RESONANCE_RESET_CONFIRM")
-    end)
-    reset:SetPoint("LEFT", preview, "RIGHT", 10, 0)
-
-    local saveSorting = CreateButton(panel, "SAVE sorting changes", 190, function()
-        local moveCount, deletionCount = ns:GetSortingDraftCounts()
-        ns:SaveCategoryDraft()
-        ns:RefreshOptions()
-        if ns.SoundPicker and ns.SoundPicker:IsShown() then ns.SoundPicker:RefreshSounds() end
-        ns:Print(string.format("Saved %d category moves and %d deletion marks. Log out normally before asking Codex to apply them.", moveCount, deletionCount))
-    end, true)
-    saveSorting:SetPoint("LEFT", reset, "RIGHT", 10, 0)
-
-    local sortingStatus = CreateText(panel, "GameFontHighlightSmall", "")
-    sortingStatus:SetPoint("LEFT", saveSorting, "RIGHT", 12, 0)
-    sortingStatus:SetPoint("RIGHT", panel, "RIGHT", -18, 0)
-    sortingStatus:SetJustifyH("LEFT")
-    sortingStatus:SetWordWrap(false)
-    saveSorting.refresh = function(self)
-        local visible = ns.DB.soundSortDebug == true
-        local dirty = visible and ns:HasUnsavedSortingChanges()
-        local moveCount, deletionCount = ns:GetSortingDraftCounts()
-        self:SetShown(visible)
-        self:SetEnabled(dirty == true)
-        self:SetText(dirty and "SAVE sorting changes" or "Sorting changes saved")
-        sortingStatus:SetShown(visible)
-        sortingStatus:SetText(dirty
-            and string.format("Unsaved • %d moved • %d delete", moveCount, deletionCount)
-            or string.format("Saved • %d moved • %d delete", moveCount, deletionCount))
-        sortingStatus:SetTextColor(unpack(dirty and {0.96, 0.66, 0.16, 1} or COLORS.teal))
     end
-    RegisterOptionWidget(saveSorting)
+    -- A UIPanelScrollFrame can report its previous (or zero) viewport width
+    -- while this standalone window is still hidden.  Keep the reflow on the
+    -- panel itself too, so opening a resized window never leaves a narrow
+    -- content column and a large unused strip at the right.
+    panel._resonanceReflowContent = ReflowContentWidth
+    panel:SetScript("OnSizeChanged", function()
+        ReflowContentWidth(scroll:GetWidth())
+    end)
+    scroll:SetScript("OnSizeChanged", function(_, width) ReflowContentWidth(width) end)
+    -- Anchored ScrollFrames do not always emit OnSizeChanged before their
+    -- first show. Reflow once now and once on the next frame so a persisted
+    -- large editor width is never left with a narrow, empty content column.
+    ReflowContentWidth(scroll:GetWidth())
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0, function()
+            if ns.OptionsPanel == panel then ReflowContentWidth(scroll:GetWidth()) end
+        end)
+    end
 
-    local note = CreateText(panel, "GameFontHighlightSmall", "Uses installed WoW spell sounds only. No audio files are bundled.")
-    note:SetPoint("BOTTOMRIGHT", -18, 21)
-    note:SetTextColor(unpack(COLORS.muted))
-    note.refresh = function(self) self:SetShown(not ns.DB.soundSortDebug) end
-    RegisterOptionWidget(note)
+    if DEBUG_SOUND_TOOLS_VISIBLE then
+        local saveSorting = CreateButton(panel, "SAVE sorting changes", 190, function()
+            local moveCount, deletionCount = ns:GetSortingDraftCounts()
+            ns:SaveCategoryDraft()
+            ns:RefreshOptions()
+            if ns.SoundPicker and ns.SoundPicker:IsShown() then ns.SoundPicker:RefreshSounds() end
+            ns:Print(string.format("Saved %d category moves and %d deletion marks. Log out normally before asking Codex to apply them.", moveCount, deletionCount))
+        end, true)
+        saveSorting:SetPoint("BOTTOMLEFT", 18, 14)
+
+        local sortingStatus = CreateText(panel, "GameFontHighlightSmall", "")
+        sortingStatus:SetPoint("LEFT", saveSorting, "RIGHT", 12, 0)
+        sortingStatus:SetPoint("RIGHT", panel, "RIGHT", -18, 0)
+        sortingStatus:SetJustifyH("LEFT")
+        sortingStatus:SetWordWrap(false)
+        saveSorting.refresh = function(self)
+            local visible = IsSoundSortingDebugActive()
+            local dirty = visible and ns:HasUnsavedSortingChanges()
+            local moveCount, deletionCount = ns:GetSortingDraftCounts()
+            self:SetShown(visible)
+            self:SetEnabled(dirty == true)
+            self:SetText(dirty and "SAVE sorting changes" or "Sorting changes saved")
+            sortingStatus:SetShown(visible)
+            sortingStatus:SetText(dirty
+                and string.format("Unsaved • %d moved • %d delete", moveCount, deletionCount)
+                or string.format("Saved • %d moved • %d delete", moveCount, deletionCount))
+            sortingStatus:SetTextColor(unpack(dirty and {0.96, 0.66, 0.16, 1} or COLORS.teal))
+        end
+        RegisterOptionWidget(saveSorting)
+    end
 
     panel:SetScript("OnShow", function()
         panel:Raise()
+        ReflowContentWidth(scroll:GetWidth())
         ns:ShowOptionsSpec(ns:GetCurrentOptionsSpec())
+        -- The anchored scroll viewport reaches its final dimensions after
+        -- the first visible frame. Reflow once more so a persisted wide
+        -- editor always fills its frame immediately.
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0, function()
+                if ns.OptionsPanel == panel and panel:IsShown() then
+                    ReflowContentWidth(scroll:GetWidth())
+                end
+            end)
+        end
         if ns.ResumeTutorialFromOptions then ns:ResumeTutorialFromOptions() end
     end)
     panel:SetScript("OnHide", function()
@@ -1891,12 +2042,11 @@ function ns:OpenOptions()
         return
     end
     if not self.OptionsPanel then self:CreateOptions() end
-    local wasShown = self.OptionsPanel:IsShown()
     self.SelectedOptionsSpec = self:GetCurrentOptionsSpec()
     self.OptionsPanel:Show()
-    if wasShown then
-        self:ShowOptionsSpec(self.SelectedOptionsSpec)
-    end
+    -- Select the played specialization on every open.  This also refreshes
+    -- the just-created panel before its first visible frame.
+    self:ShowOptionsSpec(self.SelectedOptionsSpec)
     self.OptionsPanel:Raise()
 end
 

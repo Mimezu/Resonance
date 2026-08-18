@@ -1,4 +1,9 @@
-# Resonance 1.10.0
+# Resonance 1.14.0
+
+## 1.14.0
+
+- Refined the responsive editor layout: moment cards fill the available width at first open, spell identity stacks are compact, and all panels use a single clean closed border.
+- Temporarily removed diagnostic and catalog-sorting controls from the player UI for this release. Existing sorting drafts and their implementation remain preserved for the next sound-catalog editing pass.
 
 Resonance adds configurable, event-driven spell ambience to every Retail specialization while leaving Blizzard's original spell audio untouched.
 
@@ -14,7 +19,7 @@ Resonance adds configurable, event-driven spell ambience to every Retail special
 - The sound picker includes verified live and legacy class spells, martial effects, and iconic encounter one-shots; retired abilities are labeled Legacy.
 - A floating sound picker organizes assets by texture, including Physical, Poison & Toxin, and Metal & Machines alongside the magical families.
 - Search scans labels and provenance across the complete library, so boss, raid, dungeon, class, and spell names remain easy to find as the catalog grows.
-- Sound sets are saved per character and specialization. Every spec receives protected, hand-curated `Resonance Subtle`, `Resonance Medium`, and `Resonance Expressive` presets with distinct sound choices, delays, layers, and enabled moments; personal sets can still be created, loaded, overwritten, or deleted.
+- Sound sets are saved per character and specialization. A player's first edit creates and activates one protected Personal set named `Character — Realm`. Editing a bundled preset immediately switches the edited working copy to that Personal set; later edits mark it changed but do not write into it until `Save changes` is chosen. Every spec also receives protected, hand-curated `Resonance Subtle`, `Resonance Medium`, and `Resonance Expressive` presets with distinct sound choices, delays, layers, and enabled moments.
 - Any built-in or personal sound set can be exported as a versioned, checksummed text code and safely imported by another character playing the same specialization. Imports never execute Lua, overwrite an existing set, or auto-load themselves.
 - Personal sets carry explicit schema, rule-catalog and sound-catalog versions. Stable rule IDs and numeric FileDataIDs survive category/label changes; ordered aliases and remaps adapt retired identifiers, missing sounds are preserved but fail closed, and new rules stay disabled in older personal mixes until chosen.
 - The developer-facing migration rules are documented in `COMPATIBILITY.md` so future releases keep this guarantee instead of relying on convention.
@@ -32,7 +37,6 @@ Resonance adds configurable, event-driven spell ambience to every Retail special
 - Real player-class assets use `Class — Spell · Moment` labels even when an encounter reuses the same sound. Provenance stays in the searchable description.
 - No new dialogue, music, ambience, footsteps, or persistent loops are imported. Two previously exposed non-transient assets remain isolated in Novelty for saved-set compatibility.
 - Fine-grained families add sparkles, twinkles, chimes, crystal echoes/charges, embers, dust and short whooshes.
-- Temporary `Sound sorting mode` can move sounds between families, mark sounds for deletion, and save a complete draft in `ResonanceDB.categoryExport` for Codex to canonize later.
 - Solo audition mode temporarily routes Resonance to Dialog while muting SFX, music, and ambience, then restores the previous mix on disable or normal logout/reload.
 - Preservation includes a delayed bronze Echo afterimage, nature accents for Verdant Embrace and Emerald Blossom, separate deep Fire Breath charge/release cues, and a watery-nature Merithra's Blessing cast phrase.
 
@@ -41,12 +45,10 @@ Resonance adds configurable, event-driven spell ambience to every Retail special
 - `/res` or `/res options` — open Settings.
 - `/res on`, `/res off`, `/res toggle` — master control.
 - `/res test` — preview the current major cue.
-- `/res audit` — print detected spec, hero tree, Apex and rule count.
 - `/res solo` — toggle temporary solo audition mode.
 - `/res minimap` — show or hide the minimap button.
-- `/res refresh` — rescan the live talent configuration.
 - `/res reset` — reset configuration after confirmation.
 
 ## First test
 
-Enable Resonance for the character, log in, run `/res audit`, open a sound swatch, audition the catalog, then test at a target dummy before entering group content. Diagnostic messages can be enabled temporarily from the standalone `/res` window.
+Enable Resonance for the character, log in, open a sound swatch, audition the catalog, then test at a target dummy before entering group content.

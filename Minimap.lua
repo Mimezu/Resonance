@@ -62,10 +62,37 @@ local function UpdateAngle(button)
     SetPosition(button)
 end
 
+local function PreviewRandomCatalogSound()
+    local catalog = ns.SoundCatalog or {}
+    local candidates = {}
+    for _, sound in ipairs(catalog) do
+        if sound and sound.id and not ns:IsSoundMarkedForDelete(sound.id) then
+            candidates[#candidates + 1] = sound
+        end
+    end
+    if #candidates == 0 then return false end
+
+    -- Avoid the immediately previous preview when there is another choice.
+    local selected = candidates[math.random(#candidates)]
+    if #candidates > 1 and selected.id == ns.LastMinimapPreviewID then
+        for _, candidate in ipairs(candidates) do
+            if candidate.id ~= ns.LastMinimapPreviewID then
+                selected = candidate
+                break
+            end
+        end
+    end
+    ns.LastMinimapPreviewID = selected.id
+    return ns:PreviewSoundFile(selected.id)
+end
+
 function ns:CreateMinimapButton()
     if self.MinimapButton then return end
     local button = CreateFrame("Button", "ResonanceMinimapButton", Minimap)
-    button:SetSize(32, 32)
+    -- These are the current Retail LibDBIcon proportions. The prior border
+    -- was offset outside the button, making the purple icon look detached on
+    -- Blizzard's round minimap.
+    button:SetSize(31, 31)
     button:SetFrameStrata("MEDIUM")
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -74,7 +101,7 @@ function ns:CreateMinimapButton()
     button.minimapButton = true
 
     local background = button:CreateTexture(nil, "BACKGROUND")
-    background:SetSize(20, 20)
+    background:SetSize(24, 24)
     background:SetPoint("CENTER")
     background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
 
@@ -85,14 +112,13 @@ function ns:CreateMinimapButton()
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
     local border = button:CreateTexture(nil, "OVERLAY")
-    border:SetSize(52, 52)
-    border:SetPoint("TOPLEFT", button, "TOPLEFT", -10, 10)
+    border:SetSize(50, 50)
+    border:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 
     button:SetScript("OnClick", function(_, mouseButton)
         if mouseButton == "RightButton" then
-            local rule = ns.Runtime.activeRules and ns.Runtime.activeRules[1]
-            if rule then ns:PlayRule(rule, true) else ns:OpenSoundPicker(nil, function() end, "arcane") end
+            PreviewRandomCatalogSound()
         else
             ns:OpenOptions()
         end
@@ -107,7 +133,7 @@ function ns:CreateMinimapButton()
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText("Resonance", 1, 1, 1)
         GameTooltip:AddLine("Left-click: Open settings", nil, nil, nil, true)
-        GameTooltip:AddLine("Right-click: Preview an active sound", nil, nil, nil, true)
+        GameTooltip:AddLine("Right-click: Play a random Resonance sound", nil, nil, nil, true)
         GameTooltip:AddLine("Drag: Move around the minimap", nil, nil, nil, true)
         GameTooltip:Show()
     end)
