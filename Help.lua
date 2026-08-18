@@ -176,3 +176,16 @@ function ns:OpenHelp(topicIndex)
     self.HelpWindow:Show()
     self.HelpWindow:Raise()
 end
+
+function ns:ToggleHelp(topicIndex)
+    self:CreateHelpWindow()
+    if self.HelpWindow:IsShown() then
+        self.HelpWindow:Hide()
+        return
+    end
+    self:OpenHelp(topicIndex)
+end
+
+function ns:CloseHelp()
+    if self.HelpWindow then self.HelpWindow:Hide() end
+end

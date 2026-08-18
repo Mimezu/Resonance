@@ -1187,7 +1187,7 @@ local function BuildGeneral(content, y)
     solo:SetPoint("TOPLEFT", 300, -86)
     solo:SetWidth(300)
 
-    local sorting = CreateCheckRow(section, "Sound sorting mode", "Temporary workspace: multi-select sounds, drag them between categories, stage deletions, then save from the main footer.",
+    local sorting = CreateCheckRow(section, "Debug: Sound sorting mode", "Temporary workspace: multi-select sounds, drag them between categories, stage deletions, then save from the main footer.",
         function() return ns.DB.soundSortDebug end,
         function(value)
             ns.DB.soundSortDebug=value
@@ -1775,7 +1775,7 @@ function ns:CreateOptions()
     creator:SetPoint("TOPRIGHT", version, "BOTTOMRIGHT", 0, -4)
     creator:SetTextColor(unpack(COLORS.muted))
 
-    local helpButton = CreateButton(header, "?  Help", 72, function() ns:OpenHelp() end)
+    local helpButton = CreateButton(header, "?  Help", 72, function() ns:ToggleHelp() end)
     helpButton:SetPoint("RIGHT", header, "RIGHT", -142, 0)
     self.HelpButton = helpButton
 
@@ -1859,6 +1859,7 @@ function ns:CreateOptions()
     end)
     panel:SetScript("OnHide", function()
         panel:StopMovingOrSizing()
+        if ns.CloseHelp then ns:CloseHelp() end
         if ns.PauseTutorial then ns:PauseTutorial("options-hidden") end
     end)
     panel:Hide()

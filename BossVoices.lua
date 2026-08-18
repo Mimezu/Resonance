@@ -2,7 +2,9 @@ local _, ns = ...
 
 -- English encounter voice one-shots verified against this Retail client's local CASC payload.
 -- Labels stay source-first because recognition and provenance are the purpose
--- of this optional library. Every retained entry decodes, contains audible signal, and is at most five seconds.\n-- Resonance bundles no audio files.
+-- of this optional library. Retained entries are verified audible and normally
+-- at most five seconds. Explicitly requested iconic length exceptions are
+-- labeled with their duration. Resonance bundles no audio files.
 ns.BossVoiceCatalog = {
     -- Battle for Azeroth · Uldir
     { id=1990727, category="voice", label="Taloc — Encounter line II", detail="Uldir · Battle for Azeroth" },
@@ -92,7 +94,8 @@ ns.BossVoiceCatalog = {
     { id=2994783, category="voice", label="Queen Azshara — Voice take IV", detail="Nazjatar / Eternal Palace era · Battle for Azeroth" },
 
     -- Dragonflight · Vault of the Incarnates
-
+    -- Raszageth "Ruin! Ruin!" is FileDataID 4641508, but the installed client
+    -- cannot decrypt it. Keep the mapping documented without exposing a silent swatch.
     -- Dragonflight · Aberrus
 
     -- Dragonflight · Amirdrassil
@@ -146,6 +149,11 @@ ns.BossVoiceCatalog = {
     { id=6159010, category="voice", label="Chrome King Gallywix — Encounter voice IV", detail="Liberation of Undermine · The War Within" },
 
     -- The War Within · Manaforge Omega
+    { id=6729191, category="voice", label="Dimensius — Short encounter yell", detail="Manaforge Omega · processed Void Lord line · 4.77 s" },
+    { id=6729165, category="voice", label="Dimensius — Grind you to dust!", detail="Manaforge Omega · Dark Matter · 7.07 s" },
+    { id=6729175, category="voice", label="Dimensius — The heavens bow to me!", detail="Manaforge Omega · Extinction · 7.80 s" },
+    { id=6729197, category="voice", label="Dimensius — Stars crumble in my grip!", detail="Manaforge Omega · Supernova · 7.92 s" },
+    { id=6729202, category="voice", label="Dimensius — The sky falls at my command", detail="Manaforge Omega · Darkened Sky · 8.34 s" },
 
     -- Midnight 12.1 · currently identifiable raid voice folders
 }

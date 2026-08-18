@@ -6,6 +6,7 @@ ns.SoundCategories = {
     { id = "favorites", label = "Favorites", color = { 0.96, 0.76, 0.24 } },
     { id = "novelty", label = "Novelty & Fun", color = { 1.00, 0.42, 0.72 } },
     { id = "voice", label = "Boss Voices & Yells", color = { 0.92, 0.30, 0.38 } },
+    { id = "vocal", label = "Dark Vocals", color = { 0.72, 0.38, 0.82 } },
     { id = "bronze", label = "Bronze & Time", color = { 0.83, 0.55, 0.22 } },
     { id = "arcane", label = "Arcane", color = { 0.61, 0.39, 1.00 } },
     { id = "nature", label = "Nature", color = { 0.30, 0.86, 0.42 } },
@@ -774,6 +775,28 @@ local encounterLayerCatalog = {
     { id=4553917, category="poison", label="Volatile toxin burst", detail="Blight Reclamation · Dawn of the Infinite" },
     { id=2066557, category="fire", label="Blight breath cast", detail="Blight of Galakrond · Dawn of the Infinite" },
 
+    -- L'ura and the Darkwell, Midnight Falls. Direct L'ura dialogue remains
+    -- encrypted in this client, so only locally decoded encounter effects ship.
+    { id=6985747, category="void", label="L'ura — Heaven's Glaives I", detail="Midnight Falls · March on Quel'Danas · precast · 4.67 s" },
+    { id=6985749, category="void", label="L'ura — Heaven's Glaives II", detail="Midnight Falls · March on Quel'Danas · precast · 5.00 s" },
+    { id=6985761, category="void", label="L'ura — Heaven's Glaives III", detail="Midnight Falls · March on Quel'Danas · precast · 5.00 s" },
+    { id=5145514, category="void", label="Darkwell phoenix pulse I", detail="Midnight Falls · March on Quel'Danas · phoenix egg" },
+    { id=5145516, category="void", label="Darkwell phoenix pulse II", detail="Midnight Falls · March on Quel'Danas · phoenix egg" },
+    { id=5145518, category="void", label="Darkwell phoenix pulse III", detail="Midnight Falls · March on Quel'Danas · phoenix egg" },
+
+    -- Dimensius encounter layers traced from the 11.2 Manaforge Omega spell
+    -- graph and decoded from the installed client. Reused source assets retain
+    -- encounter provenance only because they are genuinely wired to the spell.
+    { id=7130066, category="physical", label="Dimensius — Massive Smash windup", detail="Massive Smash · Manaforge Omega · 4.45 s" },
+    { id=7129876, category="void", label="Dimensius — Massive Smash surge", detail="Massive Smash · Manaforge Omega · 3.21 s" },
+    { id=6795933, category="void", label="Dimensius — Devour collapse", detail="Devour · Manaforge Omega · 2.65 s" },
+    { id=6795935, category="void", label="Dimensius — Gamma sweep", detail="Gamma Burst · Manaforge Omega · 2.27 s" },
+    { id=4391363, category="void", label="Dimensius — Gamma targeting pulse", detail="Gamma Burst · Manaforge Omega · 0.99 s" },
+    { id=1487007, category="void", label="Dimensius — Gamma warp swell", detail="Gamma Burst · Manaforge Omega · 4.04 s" },
+    { id=6796162, category="void", label="Dimensius — Supernova void cast II", detail="Supernova · Manaforge Omega · 1.97 s" },
+    { id=5367476, category="air", label="Dimensius — Reverse-gravity lift", detail="Reverse Gravity · Manaforge Omega · 1.85 s" },
+    { id=6908201, category="void", label="Dimensius — Shattered-space cast II", detail="Shattered Space · Manaforge Omega · 2.50 s" },
+
     -- Midnight launch-raid accents, traced from current encounter spells and
     -- decoded from the local 12.1 client before inclusion.
     { id=7569671, category="void", label="Ravenous consume cast", detail="Chimaerus · Consume · The Dreamrift" },
@@ -807,8 +830,8 @@ local encounterLayerCatalog = {
     { id=985226, category="void", label="Void crystal cast", detail="L'ura and Argus void magic" },
     { id=985266, category="void", label="Umbral pulse", detail="L'ura · Umbral Cadence" },
     { id=6758093, category="void", label="Argus void spark", detail="Seat of the Triumvirate and Argus" },
-    { id=6907105, category="void", label="Hollow void whoosh", detail="L'ura · Dirge of Despair · precast" },
-    { id=6995073, category="void", label="Grinding void zip", detail="L'ura · Dirge of Despair · impact" },
+    { id=6907105, category="void", label="Hollow void whoosh", detail="Null Breath · reusable void precast" },
+    { id=6995073, category="void", label="Grinding void zip", detail="Gloombite · reusable void impact" },
     { id=6022528, category="void", label="Nexus dagger cast I", detail="Nexus-Princess Ky'veza · Nexus Daggers · Voidrazor Sanctuary" },
     { id=6022530, category="void", label="Nexus dagger cast II", detail="Nexus-Princess Ky'veza · Nexus Daggers · Voidrazor Sanctuary" },
     { id=6022533, category="void", label="Nexus dagger cast III", detail="Nexus-Princess Ky'veza · Nexus Daggers · Voidrazor Sanctuary" },
@@ -880,6 +903,69 @@ for _, sound in ipairs(encounterLayerCatalog) do
     catalog[#catalog + 1] = sound
 end
 
+-- Short non-dialogue vocal textures intended for spell layering. Every new
+-- entry was extracted from the installed Retail client, decoded as audible,
+-- and measured at five seconds or less. Recognizable spoken boss lines remain
+-- in Boss Voices & Yells instead.
+local darkVocalCatalog = {
+    { id=544832, category="vocal", label="Banshee rising cry", detail="Classic banshee · opening shriek · 2.27 s" },
+    { id=544833, category="vocal", label="Banshee anguish", detail="Classic banshee · critical wail · 2.80 s" },
+    { id=544837, category="vocal", label="Banshee warning", detail="Classic banshee · short spectral cry · 1.87 s" },
+    { id=544834, category="vocal", label="Banshee lash I", detail="Classic banshee · attack shriek · 2.57 s" },
+    { id=544835, category="vocal", label="Banshee lash II", detail="Classic banshee · attack wail · 3.00 s" },
+    { id=1250648, category="vocal", label="Spectral banshee cry", detail="Banshee creature vocal · spectral attack · 2.27 s" },
+    { id=1250658, category="vocal", label="Spectral banshee shriek", detail="Banshee creature vocal · critical attack · 2.34 s" },
+    { id=549783, category="vocal", label="Restless spirit cry", detail="Classic ghost · spectral call · 2.42 s" },
+    { id=549785, category="vocal", label="Spirit warning", detail="Classic ghost · distant premonition · 2.67 s" },
+    { id=549786, category="vocal", label="Spirit rupture", detail="Classic ghost · anguished cry · 2.76 s" },
+    { id=546301, category="vocal", label="Cold wraith cry I", detail="Icecrown wraith · attack vocal · 2.09 s" },
+    { id=546305, category="vocal", label="Cold wraith cry II", detail="Icecrown wraith · short attack vocal · 1.86 s" },
+    { id=546321, category="vocal", label="Cold wraith fracture", detail="Icecrown wraith · critical cry · 2.06 s" },
+    { id=547192, category="vocal", label="Devourer soul cry I", detail="Forge of Souls · layered exertion · 4.05 s" },
+    { id=547194, category="vocal", label="Devourer soul cry II", detail="Forge of Souls · dark vocal swell · 3.43 s" },
+    { id=545889, category="vocal", label="Deathwhisper syllable I", detail="Icecrown Citadel · short incantation · 0.99 s" },
+    { id=545890, category="vocal", label="Deathwhisper incantation", detail="Icecrown Citadel · ritual invocation · 4.09 s" },
+    { id=545897, category="vocal", label="Deathwhisper syllable II", detail="Icecrown Citadel · attack incantation · 1.50 s" },
+    { id=545904, category="vocal", label="Deathwhisper syllable III", detail="Icecrown Citadel · sharp dark utterance · 1.28 s" },
+    { id=548424, category="vocal", label="Faceless omen I", detail="Old God creature · gathering growl · 1.88 s" },
+    { id=548421, category="vocal", label="Faceless omen II", detail="Old God creature · short warning · 1.55 s" },
+    { id=548434, category="vocal", label="Faceless rupture", detail="Old God creature · critical vocal · 1.21 s" },
+    { id=548465, category="vocal", label="Faceless awakening", detail="Faceless One · ominous rise · 2.83 s" },
+    { id=548475, category="vocal", label="Faceless deep call", detail="Faceless One · combat cry · 2.10 s" },
+    { id=564845, category="vocal", label="Yogg-Saron dark whisper I", detail="Ulduar · processed Old God whisper · 4.62 s" },
+    { id=564856, category="vocal", label="Yogg-Saron dark whisper II", detail="Ulduar · processed Old God whisper · 4.58 s" },
+    { id=595109, category="vocal", label="Murmur resonance I", detail="Shadow Labyrinth · living-sound vocal · 2.47 s" },
+    { id=595118, category="vocal", label="Murmur resonance II", detail="Shadow Labyrinth · resonant roar · 2.85 s" },
+    { id=960592, category="vocal", label="Primal invocation", detail="Draenor spiritual orc · short call · 0.76 s" },
+    { id=1986625, category="vocal", label="Drust witch hex cry I", detail="Drustvar · Battle for Azeroth · 1.34 s" },
+    { id=1986629, category="vocal", label="Drust witch hex cry II", detail="Drustvar · Battle for Azeroth · 2.07 s" },
+    { id=2012918, category="vocal", label="Troll lich death-magic cry", detail="Battle for Azeroth · undead troll · 2.61 s" },
+    { id=2012922, category="vocal", label="Troll lich ritual roar", detail="Battle for Azeroth · undead troll · 3.49 s" },
+    { id=2143792, category="vocal", label="Drust horror primal roar", detail="Drust creature vocal · Battle for Azeroth · 3.47 s" },
+    { id=2620128, category="vocal", label="Uu'nat void exertion", detail="Crucible of Storms · attack cry · 1.85 s" },
+    { id=2620133, category="vocal", label="Uu'nat dark syllable", detail="Crucible of Storms · short attack vocal · 1.20 s" },
+    { id=2737249, category="vocal", label="Zaxasj void invocation", detail="Crucible of Storms · attack cry · 2.30 s" },
+    { id=2737254, category="vocal", label="Zaxasj dark syllable", detail="Crucible of Storms · short attack vocal · 1.74 s" },
+    { id=4188361, category="vocal", label="Maw necromancer invocation I", detail="Torghast / Maw · creature vocal · 2.98 s" },
+    { id=4188365, category="vocal", label="Maw necromancer invocation II", detail="Torghast / Maw · creature vocal · 3.55 s" },
+    { id=4187320, category="vocal", label="Dark Val'kyr attack cry", detail="Shadowlands · dark Val'kyr · 4.25 s" },
+    { id=4187832, category="vocal", label="Ner'zhul tormented cry I", detail="Sanctum of Domination · 2.75 s" },
+    { id=4187836, category="vocal", label="Ner'zhul tormented cry II", detail="Sanctum of Domination · 3.06 s" },
+    { id=4195396, category="vocal", label="Kel'Thuzad necrotic syllable I", detail="Sanctum of Domination · 0.69 s" },
+    { id=4195398, category="vocal", label="Kel'Thuzad necrotic syllable II", detail="Sanctum of Domination · 0.87 s" },
+    { id=4363828, category="vocal", label="Anduin dominated battle cry", detail="Sepulcher of the First Ones · 2.67 s" },
+    { id=4851936, category="vocal", label="Dathea storm cry", detail="Vault of the Incarnates · 1.66 s" },
+    { id=5126446, category="vocal", label="Neltharion deep exertion I", detail="Aberrus · Echo of Neltharion · 0.56 s" },
+    { id=5126448, category="vocal", label="Neltharion deep exertion II", detail="Aberrus · Echo of Neltharion · 0.96 s" },
+    { id=5373190, category="vocal", label="Fyrakk primal cry I", detail="Amirdrassil · wounded dragon vocal · 1.48 s" },
+    { id=5373192, category="vocal", label="Fyrakk primal cry II", detail="Amirdrassil · wounded dragon vocal · 1.30 s" },
+    { id=7679042, category="vocal", label="Haunting roar I", detail="Midnight · dark creature spell vocal · 2.37 s" },
+    { id=7679044, category="vocal", label="Haunting roar II", detail="Midnight · dark creature spell vocal · 2.40 s" },
+}
+for _, sound in ipairs(darkVocalCatalog) do
+    catalog[#catalog + 1] = sound
+end
+
 -- Signature-scale, recognizable, voice-like or deliberately playful sounds are
 -- still available, but kept away from the normal spell-layer palettes.
 local noveltyCatalog = {
@@ -888,7 +974,7 @@ local noveltyCatalog = {
     { id=4181070, category="novelty", label="The Tarragrue — Chains of Eternity", detail="Sanctum of Domination · boss signature" },
     { id=4199738, category="novelty", label="Sylvanas — Veil release", detail="Sanctum of Domination · boss signature" },
     { id=4199946, category="novelty", label="Sylvanas — Tormented Eruptions", detail="Sanctum of Domination · boss signature" },
-    { id=4205409, category="novelty", label="Sylvanas — Banshee Wail", detail="Sanctum of Domination · voice-like signature" },
+    { id=4205409, category="novelty", label="Sylvanas — Banshee Wail", detail="Sanctum of Domination · signature scream · 6.27 s" },
     { id=5482155, category="novelty", label="Tindral — Owl of the Flame", detail="Amirdrassil · transformation signature" },
     { id=5013952, category="novelty", label="Infinite Annihilation", detail="Dawn of the Infinite · signature cast" },
     { id=5221582, category="novelty", label="Tyr — Titanic Blow", detail="Dawn of the Infinite · signature attack" },

@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "1.12.0"
+ns.VERSION = "1.13.0"
 ns.COLOR = "|cff9d7cff"
 ns.SPEC_ORDER = {
     71, 72, 73,       -- Warrior
@@ -63,7 +63,7 @@ ns.SUPPORTED_SPECS = {
 ns.BUILTIN_SET_VERSION = 6
 ns.PROFILE_SCHEMA_VERSION = 1
 ns.RULE_CATALOG_VERSION = 2
-ns.SOUND_CATALOG_VERSION = 2
+ns.SOUND_CATALOG_VERSION = 4
 ns.CURATED_PRESETS = {
     { key = "subtle", name = "Resonance Subtle" },
     { key = "medium", name = "Resonance Medium" },
@@ -71,7 +71,7 @@ ns.CURATED_PRESETS = {
 }
 
 local DEFAULTS = {
-    version = 7,
+    version = 8,
     enabled = true,
     palette = "subtle",
     channel = "SFX",
@@ -299,6 +299,9 @@ local ACCOUNT_MIGRATIONS = {
     [6] = function() end, -- Introduced ordered migrations and compatibility metadata.
     [7] = function(database) -- Interactive tutorial progress; no profile data changes.
         if type(database.tutorial) ~= "table" then database.tutorial = {} end
+    end,
+    [8] = function(database) -- Debug sorting is always opt-in after this update.
+        database.soundSortDebug = false
     end,
 }
 

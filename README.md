@@ -21,6 +21,7 @@ Resonance adds configurable, event-driven spell ambience to every Retail special
 - Presets change the actual enabled moments. There is no global density filter, priority threshold, or sound budget silently suppressing an explicitly enabled spell.
 - The compact editor uses real specialization icons, builds only the selected spec's controls, and places every moment for a spell horizontally on one card.
 - Resonance windows use slim purple/teal scrollbars with wheel, track-click, and drag support instead of Blizzard's large arrow controls.
+- The `? Help` window can be moved independently, while closing the Resonance editor closes it too.
 - Hero-tree names and capability gates come from the active trait subtree, preventing inactive hero talents from leaking into the selected build.
 - Apex detection retains both a selected talent's passive/base identity and any active replacement spell, covering multi-rank replacement talents such as Merithra's Blessing.
 - The temporary Misc family is retired. Six user-selected legacy accents were canonized into Arcane and Bronze; the other fourteen were removed.
