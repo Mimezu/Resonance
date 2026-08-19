@@ -1,4 +1,8 @@
-# Resonance 1.14.0
+# Resonance 1.14.1
+
+## 1.14.1
+
+- Hotfix: explicitly clears dormant diagnostic and catalog-editor flags on login, so legacy saved settings cannot produce chat spam while their controls are unavailable.
 
 ## 1.14.0
 

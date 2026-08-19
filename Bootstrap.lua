@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "1.14.0"
+ns.VERSION = "1.14.1"
 ns.COLOR = "|cff9d7cff"
 ns.SPEC_ORDER = {
     71, 72, 73,       -- Warrior
@@ -351,9 +351,13 @@ function ns:InitializeDatabase()
         ResonanceDB.channel = DEFAULTS.channel
     end
     if type(ResonanceDB.enabled) ~= "boolean" then ResonanceDB.enabled = DEFAULTS.enabled end
-    if type(ResonanceDB.debug) ~= "boolean" then ResonanceDB.debug = DEFAULTS.debug end
+    -- Debug controls are intentionally unavailable in this release. Always
+    -- fail closed here so an old saved toggle cannot continue spamming chat
+    -- after the UI that controlled it has been tucked away.
+    ResonanceDB.debug = false
     if type(ResonanceDB.soloMode) ~= "boolean" then ResonanceDB.soloMode = false end
-    if type(ResonanceDB.soundSortDebug) ~= "boolean" then ResonanceDB.soundSortDebug = false end
+    -- Keep category drafts themselves, but clear the dormant editor mode.
+    ResonanceDB.soundSortDebug = false
     for specID, defaultValue in pairs(DEFAULTS.specEnabled) do
         if type(ResonanceDB.specEnabled[specID]) ~= "boolean" then
             ResonanceDB.specEnabled[specID] = defaultValue
