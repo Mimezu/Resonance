@@ -1,8 +1,8 @@
 # Resonance
 
-Give your spells a richer sound identity without replacing World of Warcraft's original audio.
+Give your spells a richer sound identity while keeping World of Warcraft's original audio intact during normal play.
 
-Resonance adds carefully chosen sound accents to real spell moments such as casting, release, impact, channeling, and aura changes. Each specialization has a ready-to-use sound set, and every sound can be changed, layered, delayed, previewed, or disabled.
+Resonance adds carefully chosen sound accents when WoW confirms a successful player spell cast, starts a watched cast or channel, or completes an empowered release. Every current Retail specialization has ready-to-use sound sets, and each editable moment can be changed, layered, delayed, previewed, or disabled.
 
 [Download the latest release](https://github.com/Mimezu/Resonance/releases/latest/download/Resonance.zip)
 
@@ -12,11 +12,11 @@ Resonance adds carefully chosen sound accents to real spell moments such as cast
 
 - Enable or disable Resonance separately for each specialization.
 - Choose which spell moments receive an added sound.
-- Keep Blizzard's normal spell audio and layer Resonance over it.
+- During normal play, keep Blizzard's spell audio and layer Resonance over it.
 - Preview individual moments while you build your sound set.
 - Use the included Subtle, Medium, and Expressive presets as a starting point.
 
-Changes are organized by character and specialization, so each build can have its own sound.
+Personal sound sets are stored by character and specialization, so each build can have its own sound.
 
 ## Browse and preview the sound library
 
@@ -36,7 +36,7 @@ Each spell moment can use several sound layers. Small millisecond delays let you
 
 ## Save, switch, and share sound sets
 
-Start with a built-in preset or save your own set for a character and specialization. You can switch sets at any time, export one to share with a friend, or import a set someone sends you.
+Start with a built-in preset or save your own set for a character and specialization. You can switch sets at any time, export one to share with a friend playing the same specialization, or import a set someone sends you.
 
 ![Built-in presets and personal sound sets](.github/readme/sound-sets.png)
 
@@ -44,7 +44,7 @@ Start with a built-in preset or save your own set for a character and specializa
 
 - A movable, resizable editor with a guided tutorial and built-in help.
 - Optional minimap and AddOn Compartment access.
-- Solo audition mode for listening to added sounds more clearly while editing.
+- Solo audition mode temporarily mutes SFX, music, and ambience while routing Resonance to Dialog, then restores the previous mix when you turn it off.
 - Sound playback uses Blizzard audio already included with the game; Resonance does not bundle replacement audio files.
 
 ## Installation
@@ -60,7 +60,7 @@ Start with a built-in preset or save your own set for a character and specializa
 - `/res help` — open help.
 - `/res tutorial` — start the guided tutorial.
 - `/res on`, `/res off`, `/res toggle` — control the addon.
-- `/res test` — preview a current sound cue.
+- `/res test` — preview an active sound cue, or open the library when no cue is active.
 - `/res solo` — toggle solo audition mode.
 - `/res minimap` — show or hide the minimap button.
 - `/res reset` — reset Resonance after confirmation.
