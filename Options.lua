@@ -416,11 +416,14 @@ local function CreateSection(parent, title, subtitle, height)
     ApplyBackdrop(frame, COLORS.card)
     AddArcaneTrim(frame, "section")
 
-    local titleText = CreateText(frame, "GameFontNormalLarge", title)
-    titleText:SetPoint("TOPLEFT", 14, -11)
-    titleText:SetTextColor(unpack(COLORS.teal))
+    local titleText
+    if title and title ~= "" then
+        titleText = CreateText(frame, "GameFontNormalLarge", title)
+        titleText:SetPoint("TOPLEFT", 14, -11)
+        titleText:SetTextColor(unpack(COLORS.teal))
+    end
 
-    if subtitle then
+    if subtitle and subtitle ~= "" and titleText then
         local subtitleText = CreateText(frame, "GameFontHighlightSmall", subtitle)
         subtitleText:SetPoint("TOPLEFT", titleText, "BOTTOMLEFT", 0, -3)
         subtitleText:SetPoint("RIGHT", frame, -18, 0)
@@ -468,6 +471,38 @@ local function CreateCheckRow(parent, label, description, getter, setter)
     return row
 end
 
+-- Release controls use a compact horizontal settings band rather than the
+-- vertical form rhythm used elsewhere. This keeps their top baselines aligned
+-- and avoids scattering one-off positioning rules through BuildGeneral.
+local function CreateSettingsBandToggle(parent, label, description, getter, setter)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(300, 42)
+
+    local check = CreateModernCheck(row, 19)
+    check:SetPoint("TOPLEFT", 0, 0)
+
+    local title = CreateText(row, "GameFontNormal", label)
+    title:SetPoint("TOPLEFT", check, "TOPRIGHT", 10, 2)
+
+    if description and description ~= "" then
+        local detail = CreateText(row, "GameFontHighlightSmall", description)
+        detail:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
+        detail:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+        detail:SetJustifyH("LEFT")
+        detail:SetWordWrap(true)
+        if detail.SetMaxLines then detail:SetMaxLines(2) end
+        detail:SetTextColor(unpack(COLORS.muted))
+    end
+
+    check.getter = getter
+    check:SetScript("OnClick", function(self)
+        setter(self:GetChecked() == true)
+    end)
+    AddTooltip(check, label, description or "")
+    RegisterOptionWidget(check)
+    return row
+end
+
 local function CreateCycle(parent, label, values, getter, setter, width)
     width = width or 230
     local frame = CreateFrame("Frame", nil, parent)
@@ -496,6 +531,32 @@ local function CreateCycle(parent, label, values, getter, setter, width)
     end
     RegisterOptionWidget(button)
     return frame
+end
+
+-- The public settings band uses the same behavior as a regular cycle, but
+-- presents it as one compact action instead of a label-and-field stack.
+local function CreateCompactCycle(parent, values, getter, setter, width)
+    local button = CreateButton(parent, "", width, function(self)
+        local current = getter()
+        local index = 1
+        for i, entry in ipairs(values) do
+            if entry.value == current then index = i break end
+        end
+        index = index % #values + 1
+        setter(values[index].value)
+        self:refresh()
+    end)
+    button.refresh = function(self)
+        local current = getter()
+        for _, entry in ipairs(values) do
+            if entry.value == current then
+                self:SetText(entry.label .. "  |cff9d7cff›|r")
+                return
+            end
+        end
+    end
+    RegisterOptionWidget(button)
+    return button
 end
 
 local function CreateEditBox(parent, width)
@@ -940,19 +1001,31 @@ function ns:CreateSoundPicker()
 end
 
 local MOMENT_CELL_WIDTH = 344
-local MOMENT_CELL_GAP = 10
-local MOMENT_CONTENT_LEFT = 152
+local MOMENT_CELL_GAP = 8
+-- Keep the spell editor as two visual levels: one list frame, then the
+-- identity rail and moment panels. These values deliberately do not reuse
+-- the horizontal moment gap.
+local SPELL_ROW_GAP = 4
+-- The list starts just below the specialization controls: close enough to
+-- read as one section, with a fixed 4px clearance after the toggle.
+local SPELL_LIST_TOP = 62
+local SPELL_LIST_INSET = 4
+-- Keep the spell identity rail deliberately narrow: its job is to identify
+-- the spell, while the editor needs the horizontal space for sound layers.
+local MOMENT_CONTENT_LEFT = 114
 local SOUND_SWATCH_WIDTH = 218
 local DELAY_FIELD_WIDTH = 50
-local MOMENT_LAYER_HEIGHT = 24
+local MOMENT_LAYER_HEIGHT = 26
 
 local function GetMomentCellHeight(rule)
-    return 98 + math.max(0, ns:GetRuleLayerCount(rule) - 2) * MOMENT_LAYER_HEIGHT
+    return 102 + math.max(0, ns:GetRuleLayerCount(rule) - 2) * MOMENT_LAYER_HEIGHT
 end
 
 local function GetMomentColumns(cardWidth, momentCount)
     local available = math.max(MOMENT_CELL_WIDTH, (tonumber(cardWidth) or 0) - MOMENT_CONTENT_LEFT - 12)
-    return math.max(1, math.min(momentCount, math.floor((available + MOMENT_CELL_GAP) / (MOMENT_CELL_WIDTH + MOMENT_CELL_GAP))))
+    -- Keep moment cards at a consistent readable width. A third moment wraps
+    -- beneath the first pair instead of squeezing all three into narrow cards.
+    return math.max(1, math.min(2, momentCount, math.floor((available + MOMENT_CELL_GAP) / (MOMENT_CELL_WIDTH + MOMENT_CELL_GAP))))
 end
 
 local function GetSpellCardLayout(spellRules, columns)
@@ -962,8 +1035,11 @@ local function GetSpellCardLayout(spellRules, columns)
         local row = math.floor((index - 1) / columns) + 1
         rowHeights[row] = math.max(rowHeights[row] or 0, GetMomentCellHeight(rule))
     end
-    local height = 4
-    for _, rowHeight in ipairs(rowHeights) do height = height + rowHeight + 4 end
+    local height = 0
+    for row, rowHeight in ipairs(rowHeights) do
+        height = height + rowHeight
+        if row < #rowHeights then height = height + SPELL_ROW_GAP end
+    end
     return math.max(80, height), rowHeights
 end
 
@@ -981,9 +1057,18 @@ local function CreateMomentCell(parent, rule, cellHeight)
 
     local enabled = CreateModernCheck(cell, 16)
     enabled:SetSize(19, 19); enabled:SetPoint("TOPLEFT", 4, -3)
-    enabled:SetScript("OnClick", function(self) ns:SetRuleEnabled(rule.id, self:GetChecked() == true) end)
+    local function RefreshMomentAppearance(value)
+        cell:SetAlpha(value and 1 or 0.38)
+    end
+    enabled:SetScript("OnClick", function(self)
+        RefreshMomentAppearance(self:GetChecked() == true)
+        ns:SetRuleEnabled(rule.id, self:GetChecked() == true)
+    end)
     enabled.getter = function() return ns:GetRuleEnabled(rule) end
     RegisterOptionWidget(enabled)
+    RegisterOptionWidget({refresh=function()
+        RefreshMomentAppearance(ns:GetRuleEnabled(rule))
+    end})
     cell.enabled = enabled
 
     local title = CreateText(cell, "GameFontNormalSmall", rule.moment)
@@ -1056,7 +1141,16 @@ local function CreateMomentCell(parent, rule, cellHeight)
         cell.layerChecks[layerIndex] = layerCheck
         cell.swatches[layerIndex] = swatch
         cell.delays[layerIndex] = delay
+        local remove
+        local function RefreshLayerAppearance(value)
+            local alpha = value and 1 or 0.46
+            layerCheck:SetAlpha(alpha)
+            swatch:SetAlpha(alpha)
+            delay:SetAlpha(alpha)
+            if remove then remove:SetAlpha(alpha) end
+        end
         layerCheck:SetScript("OnClick", function(self)
+            RefreshLayerAppearance(self:GetChecked() == true)
             ns:SetLayerConfig(rule, layerIndex, {enabled=self:GetChecked()==true})
             ns:QueueRefresh("layer")
         end)
@@ -1078,14 +1172,8 @@ local function CreateMomentCell(parent, rule, cellHeight)
                 end, ns:GetSuggestedSoundCategory(rule))
             end
         end)
-        RegisterOptionWidget({refresh=function()
-            local layer=ns:GetLayerConfig(rule,layerIndex)
-            layerCheck:SetChecked(layer.enabled)
-            swatch:SetText(ShortSoundLabel(layer.soundID, layer.soundLabel))
-            delay:SetText(layer.delayMs or 0)
-        end})
         if layerIndex >= 3 then
-            local remove = CreateButton(cell, "×", 18, function()
+            remove = CreateButton(cell, "×", 18, function()
                 if ns:RemoveRuleLayer(rule, layerIndex) then ns:RebuildOptionsSpec(rule.spec) end
             end)
             remove:SetHeight(20)
@@ -1093,9 +1181,16 @@ local function CreateMomentCell(parent, rule, cellHeight)
             AddTooltip(remove, "Remove layer", "Removes this added sound layer and shifts later layers upward.")
             cell.removeButtons[layerIndex] = remove
         end
+        RegisterOptionWidget({refresh=function()
+            local layer=ns:GetLayerConfig(rule,layerIndex)
+            layerCheck:SetChecked(layer.enabled)
+            RefreshLayerAppearance(layer.enabled)
+            swatch:SetText(ShortSoundLabel(layer.soundID, layer.soundLabel))
+            delay:SetText(layer.delayMs or 0)
+        end})
     end
     for layerIndex = 1, ns:GetRuleLayerCount(rule) do
-        LayerLine(layerIndex, -31 - (layerIndex - 1) * MOMENT_LAYER_HEIGHT)
+        LayerLine(layerIndex, -33 - (layerIndex - 1) * MOMENT_LAYER_HEIGHT)
     end
     local addLayer = CreateButton(cell, "+ layer", 54, function()
         if ns:AddRuleLayer(rule) then
@@ -1103,19 +1198,18 @@ local function CreateMomentCell(parent, rule, cellHeight)
             if ns.TutorialSignal then ns:TutorialSignal("layer-added", rule.id) end
         end
     end)
-    addLayer:SetHeight(18)
-    addLayer:SetPoint("BOTTOMLEFT", 4, 3)
+    addLayer:SetHeight(20)
+    addLayer:SetPoint("BOTTOMLEFT", 4, 4)
     addLayer:SetEnabled(ns:GetRuleLayerCount(rule) < ns.MAX_RULE_LAYERS)
     AddTooltip(addLayer, "Add sound layer", "Adds another independently selectable sound and delay. Up to " .. ns.MAX_RULE_LAYERS .. " layers per moment.")
     cell.addLayer = addLayer
     function cell:ResizeForCard(width, height)
         self:SetSize(width, height)
         for layerIndex, swatch in ipairs(self.swatches) do
-            -- A lone moment should use the full row instead of leaving a
-            -- second, empty card beside it. The delay and optional remove
-            -- control stay fixed; the sound name gets the remaining width.
-            local trailingWidth = self.removeButtons[layerIndex] and 105 or 84
-            swatch:SetWidth(math.max(SOUND_SWATCH_WIDTH, width - trailingWidth))
+            -- Always reserve the trailing remove-button column. The × only
+            -- appears on added layers, but every delay stays in the same
+            -- vertical column instead of shifting when a layer is added.
+            swatch:SetWidth(math.max(SOUND_SWATCH_WIDTH, width - 105))
         end
     end
     return cell
@@ -1143,18 +1237,21 @@ end
 
 local function CreateSpellCard(parent, spellName, spellRules, y)
     local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    card:SetPoint("TOPLEFT", 10, y); card:SetPoint("TOPRIGHT", -10, y); card:SetHeight(80)
+    card:SetPoint("TOPLEFT", SPELL_LIST_INSET, y); card:SetPoint("TOPRIGHT", -SPELL_LIST_INSET, y); card:SetHeight(80)
     if card.SetClipsChildren then card:SetClipsChildren(true) end
-    ApplyBackdrop(card, COLORS.cardAlt, {0.16,0.17,0.24,1})
+    -- The spell-list frame is the one enclosing frame. Each row needs only
+    -- its identity rail and editable moment cards.
 
     local rail = CreateFrame("Frame", nil, card, "BackdropTemplate")
-    rail:SetPoint("TOPLEFT", 4, -4)
-    rail:SetPoint("BOTTOMLEFT", 4, 4)
-    rail:SetWidth(MOMENT_CONTENT_LEFT - 14)
+    rail:SetPoint("TOPLEFT", 0, 0)
+    rail:SetPoint("BOTTOMLEFT", 0, 0)
+    -- Keep the identity rail close to its moment panels so both read as one
+    -- spell record, while preserving enough width for a wrapped spell name.
+    rail:SetWidth(MOMENT_CONTENT_LEFT - 8)
     ApplyBackdrop(rail, { 0.035, 0.04, 0.065, 0.88 }, { 0.18, 0.13, 0.30, 0.90 })
 
     local identity = CreateFrame("Frame", nil, rail)
-    identity:SetSize(math.max(104, MOMENT_CONTENT_LEFT - 34), 100)
+    identity:SetSize(math.max(84, MOMENT_CONTENT_LEFT - 30), 100)
     identity:SetPoint("TOP", rail, "TOP", 0, -10)
 
     local iconFrame = CreateFrame("Frame", nil, identity, "BackdropTemplate")
@@ -1186,15 +1283,23 @@ local function CreateSpellCard(parent, spellName, spellRules, y)
     function card:Reflow()
         local columns = GetMomentColumns(self:GetWidth(), #spellRules)
         local height, rowHeights = GetSpellCardLayout(spellRules, columns)
-        local rowOffsets = { 4 }
-        for row = 2, #rowHeights do rowOffsets[row] = rowOffsets[row - 1] + rowHeights[row - 1] + 4 end
+        local rowOffsets = { 0 }
+        for row = 2, #rowHeights do rowOffsets[row] = rowOffsets[row - 1] + rowHeights[row - 1] + SPELL_ROW_GAP end
         for index, cell in ipairs(self.momentCells) do
             local column = (index - 1) % columns
             local row = math.floor((index - 1) / columns) + 1
             local firstInRow = (row - 1) * columns + 1
             local momentsInRow = math.min(columns, #spellRules - firstInRow + 1)
             local availableWidth = math.max(MOMENT_CELL_WIDTH, self:GetWidth() - MOMENT_CONTENT_LEFT - 12)
-            local cellWidth = (availableWidth - (momentsInRow - 1) * MOMENT_CELL_GAP) / momentsInRow
+            -- A single moment should not become a very long, hard-to-scan
+            -- control strip. When two normal cards fit, reserve its absent
+            -- neighbour and keep the same readable card width. On narrow
+            -- windows it still expands naturally to the available space.
+            local displayColumns = momentsInRow
+            if momentsInRow == 1 and availableWidth >= MOMENT_CELL_WIDTH * 2 + MOMENT_CELL_GAP then
+                displayColumns = 2
+            end
+            local cellWidth = (availableWidth - (displayColumns - 1) * MOMENT_CELL_GAP) / displayColumns
             cell:ClearAllPoints()
             cell:SetPoint("TOPLEFT", MOMENT_CONTENT_LEFT + column * (cellWidth + MOMENT_CELL_GAP), -rowOffsets[row])
             cell:ResizeForCard(cellWidth, rowHeights[row])
@@ -1242,27 +1347,38 @@ function ns:RefreshOptions()
 end
 
 local function BuildGeneral(content, y)
-    local section = CreateSection(content, "Experience", nil, 140)
+    -- This is a compact utility band. Public controls share one baseline;
+    -- debug-only controls retain their taller diagnostic layout.
+    local publicLayout = not DEBUG_SOUND_TOOLS_VISIBLE
+    local generalHeight = publicLayout and 56 or 140
+    local section = CreateSection(content, nil, nil, generalHeight)
     section:SetPoint("TOPLEFT", 0, y)
     section:SetPoint("TOPRIGHT", 0, y)
 
-    local enabled = CreateCheckRow(section, "Enable Resonance", nil,
-        function() return ns.DB.enabled end,
-        function(value) ns.DB.enabled = value ns:QueueRefresh("master") end)
-    enabled:SetPoint("TOPLEFT", 14, -39)
-    enabled:SetWidth(270)
-
-    local minimap = CreateCheckRow(section, "Show minimap button", nil,
-        function() return not ns.DB.minimap.hide end,
-        function(value) ns.DB.minimap.hide = not value ns:UpdateMinimapButton() end)
-    minimap:SetPoint("TOPLEFT", 14, -69)
-    minimap:SetWidth(270)
-
-    local solo = CreateCheckRow(section, "Solo added sounds", "Routes Resonance to Dialog and temporarily mutes SFX, music and ambience.",
-        function() return ns.DB.soloMode end,
-        function(value) ns:SetSoloMode(value) end)
-    solo:SetPoint("TOPLEFT", 300, -39)
-    solo:SetWidth(300)
+    local enabled
+    local minimap
+    local solo
+    if publicLayout then
+        enabled = CreateSettingsBandToggle(section, "Enable Resonance", nil,
+            function() return ns.DB.enabled end,
+            function(value) ns.DB.enabled = value ns:QueueRefresh("master") end)
+        solo = CreateSettingsBandToggle(section, "Solo added sounds", "Route Resonance to Dialog and mute the game mix.",
+            function() return ns.DB.soloMode end,
+            function(value) ns:SetSoloMode(value) end)
+        minimap = CreateSettingsBandToggle(section, "Show minimap button", nil,
+            function() return not ns.DB.minimap.hide end,
+            function(value) ns.DB.minimap.hide = not value ns:UpdateMinimapButton() end)
+    else
+        enabled = CreateCheckRow(section, "Enable Resonance", nil,
+            function() return ns.DB.enabled end,
+            function(value) ns.DB.enabled = value ns:QueueRefresh("master") end)
+        minimap = CreateCheckRow(section, "Show minimap button", nil,
+            function() return not ns.DB.minimap.hide end,
+            function(value) ns.DB.minimap.hide = not value ns:UpdateMinimapButton() end)
+        solo = CreateCheckRow(section, "Solo added sounds", "Routes Resonance to Dialog and temporarily mutes SFX, music and ambience.",
+            function() return ns.DB.soloMode end,
+            function(value) ns:SetSoloMode(value) end)
+    end
 
     if DEBUG_SOUND_TOOLS_VISIBLE then
         local debug = CreateCheckRow(section, "Diagnostic messages", "Print cue and refresh information to chat while testing.",
@@ -1282,20 +1398,72 @@ local function BuildGeneral(content, y)
         sorting:SetWidth(270)
     end
 
-    local channel = CreateCycle(section, "Audio channel", {
+    local channelValues = {
         { value = "SFX", label = "SFX (recommended)" },
         { value = "Dialog", label = "Dialog" },
         { value = "Master", label = "Master" },
-    }, function() return ns.DB.channel end, function(value) ns.DB.channel = value end, 206)
-    channel:SetPoint("TOPRIGHT", -14, -35)
-
-    local library = CreateButton(section, "Open sound library", 206, function()
+    }
+    local getChannel = function() return ns.DB.channel end
+    local setChannel = function(value) ns.DB.channel = value end
+    local channel
+    if publicLayout then
+        channel = CreateCompactCycle(section, channelValues, getChannel, setChannel, 132)
+    else
+        channel = CreateCycle(section, "Audio channel", channelValues, getChannel, setChannel, 206)
+    end
+    local library = CreateButton(section, "Open sound library", publicLayout and 160 or 206, function()
         ns:OpenSoundPicker(nil, function() end, "bronze")
     end, true)
-    library:SetPoint("TOPRIGHT", -14, -90)
     AddTooltip(library, "Sound library", "Audition the curated WoW spell assets. Pickers opened from a spell moment also save your choice.")
+    AddTooltip(channel, "Sound channel", "Choose which WoW sound channel plays Resonance layers.")
 
-    return y - 150
+    if publicLayout then
+        -- A compact, named four-column grid: related settings on the left,
+        -- one separated visibility control, then the paired audio actions.
+        local divider = section:CreateTexture(nil, "ARTWORK")
+        divider:SetTexture("Interface\\Buttons\\WHITE8X8")
+        divider:SetVertexColor(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 0.42)
+        divider:SetSize(1, 32)
+
+        local function LayoutPublicBand()
+            local width = section:GetWidth()
+            if width <= 0 then return end
+
+            local inset = 22
+            local utilityRight = width - inset
+            local libraryWidth, utilityGap = library:GetWidth(), 8
+            local utilityLeft = utilityRight - libraryWidth - utilityGap - channel:GetWidth()
+            -- Do not spread settings across the whole window on ultrawide
+            -- layouts. The reference uses a compact control cluster first,
+            -- then leaves breathing room before the right-side actions.
+            local settingsWidth = math.min(520, math.max(450, utilityLeft - inset - 230))
+            local enabledWidth = math.floor(settingsWidth * 0.50)
+            local soloX = inset + enabledWidth + 12
+            local dividerX = inset + settingsWidth + 12
+            local minimapX = dividerX + 28
+
+            enabled:SetWidth(enabledWidth)
+            solo:SetWidth(math.max(250, dividerX - soloX - 22))
+            minimap:SetWidth(math.max(180, utilityLeft - minimapX - 18))
+
+            enabled:ClearAllPoints(); enabled:SetPoint("TOPLEFT", inset, -11)
+            solo:ClearAllPoints(); solo:SetPoint("TOPLEFT", soloX, -11)
+            divider:ClearAllPoints(); divider:SetPoint("TOPLEFT", dividerX, -12)
+            minimap:ClearAllPoints(); minimap:SetPoint("TOPLEFT", minimapX, -11)
+            library:ClearAllPoints(); library:SetPoint("TOPRIGHT", -inset, -17)
+            channel:ClearAllPoints(); channel:SetPoint("RIGHT", library, "LEFT", -utilityGap, 0)
+        end
+        section:SetScript("OnSizeChanged", LayoutPublicBand)
+        LayoutPublicBand()
+    else
+        enabled:SetPoint("TOPLEFT", 14, -36)
+        minimap:SetPoint("TOPLEFT", 14, -64)
+        solo:SetPoint("TOPLEFT", 300, -36)
+        channel:SetPoint("TOPRIGHT", -14, -31)
+        library:SetPoint("TOPRIGHT", -14, -68)
+    end
+
+    return y - generalHeight - 10
 end
 
 function ns:CreateSoundSetWindow()
@@ -1310,6 +1478,7 @@ function ns:CreateSoundSetWindow()
     local title = CreateText(window, "GameFontNormalLarge", "Sound sets"); title:SetPoint("TOPLEFT", 18, -16)
     local subtitle = CreateText(window, "GameFontHighlightSmall", "Editing a preset switches you to your personal set. Save changes updates that set.")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4); subtitle:SetTextColor(unpack(COLORS.muted))
+    window.subtitle = subtitle
     local drag = CreateFrame("Frame", nil, window); drag:SetPoint("TOPLEFT"); drag:SetPoint("TOPRIGHT"); drag:SetHeight(50)
     drag:EnableMouse(true); drag:RegisterForDrag("LeftButton")
     drag:SetScript("OnDragStart", function() window:StartMoving() end); drag:SetScript("OnDragStop", function() window:StopMovingOrSizing() end)
@@ -1570,6 +1739,22 @@ function ns:CreateSoundSetWindow()
         setScroll:UpdateScrollChildRect()
         if setScroll._resonanceUpdateScrollBar then setScroll._resonanceUpdateScrollBar() end
     end
+    function window:SetSpec(specID)
+        if not ns.SUPPORTED_SPECS[specID] then return end
+        local changed = self.specID ~= specID
+        self.specID = specID
+        self.subtitle:SetText((ns.SUPPORTED_SPECS[specID] or "This specialization") .. " \226\128\162 presets and saved sets")
+        if changed then
+            -- A pending confirmation or name/import dialog belongs to the
+            -- previous specialization. Close it rather than letting it act
+            -- on a different profile after the selector changes.
+            namePanel:Hide()
+            transfer:Hide()
+            loadConfirmPanel:Hide()
+            nameBox:ClearFocus()
+        end
+        self:Refresh()
+    end
     window:SetScript("OnHide",function()
         namePanel:Hide(); transfer:Hide(); loadConfirmPanel:Hide(); nameBox:ClearFocus()
         if ns.TutorialSignal then ns:TutorialSignal("sound-sets-closed") end
@@ -1579,7 +1764,7 @@ function ns:CreateSoundSetWindow()
 end
 
 function ns:OpenSoundSetWindow(specID)
-    self:CreateSoundSetWindow(); self.SoundSetWindow.specID=specID; self.SoundSetWindow:Refresh(); self.SoundSetWindow:Show(); self.SoundSetWindow:Raise()
+    self:CreateSoundSetWindow(); self.SoundSetWindow:SetSpec(specID); self.SoundSetWindow:Show(); self.SoundSetWindow:Raise()
     if self.TutorialSignal then self:TutorialSignal("sound-sets-opened", specID) end
 end
 
@@ -1593,14 +1778,28 @@ local function BuildSpecSection(content, specID, y)
     local section = CreateSection(content, ns.SUPPORTED_SPECS[specID], nil, 84)
     section:SetPoint("TOPLEFT", 0, y)
     section:SetPoint("TOPRIGHT", 0, y)
+    section.spellCards = {}
+    section.ruleCells = {}
+
+    local function RefreshSpecCardAppearance()
+        local active = ns.DB.specEnabled[specID] ~= false
+        for _, card in ipairs(section.spellCards) do
+            card:SetAlpha(active and 1 or 0.38)
+        end
+    end
 
     local specToggle = CreateCheckRow(section, "Enable this specialization", nil,
         function() return ns.DB.specEnabled[specID] end,
-        function(value) ns.DB.specEnabled[specID] = value ns:QueueRefresh("spec toggle") end)
+        function(value)
+            ns.DB.specEnabled[specID] = value
+            RefreshSpecCardAppearance()
+            ns:QueueRefresh("spec toggle")
+        end)
     specToggle:SetPoint("TOPLEFT", 10, -32)
+    RegisterOptionWidget({refresh=RefreshSpecCardAppearance})
 
     local saveSets = CreateButton(section, "Presets / saved sets", 180, function() ns:OpenSoundSetWindow(specID) end, true)
-    saveSets:SetPoint("TOPRIGHT", -14, -49)
+    saveSets:SetPoint("TOPRIGHT", -14, -28)
     local currentSet = CreateText(section, "GameFontHighlightSmall", "")
     currentSet:SetPoint("BOTTOMRIGHT", saveSets, "TOPRIGHT", 0, 3); currentSet:SetTextColor(unpack(COLORS.muted))
     RegisterOptionWidget({refresh=function()
@@ -1623,26 +1822,38 @@ local function BuildSpecSection(content, specID, y)
         end
     end})
 
-    section.spellCards = {}
-    section.ruleCells = {}
     section.saveSets = saveSets
-    local rowY = -86
+    -- One quiet inset frame groups the whole spell list. Individual spells
+    -- keep their rail and moment panels without acquiring another wrapper.
+    local spellList = CreateFrame("Frame", nil, section, "BackdropTemplate")
+    spellList:SetPoint("TOPLEFT", section, "TOPLEFT", SPELL_LIST_INSET, -SPELL_LIST_TOP)
+    spellList:SetPoint("TOPRIGHT", section, "TOPRIGHT", -SPELL_LIST_INSET, -SPELL_LIST_TOP)
+    spellList:SetHeight(1)
+    -- The list frame defines the boundary only. Darkness belongs to the
+    -- editable identity and moment cards inside it.
+    ApplyBackdrop(spellList, { 0.02, 0.025, 0.04, 0 }, { 0.19, 0.20, 0.27, 0.95 })
+    section.spellList = spellList
+
+    local rowY = -SPELL_LIST_INSET
     for _, spellName in ipairs(order) do
-        local card, cardHeight = CreateSpellCard(section, spellName, groups[spellName], rowY)
+        local card, cardHeight = CreateSpellCard(spellList, spellName, groups[spellName], rowY)
         section.spellCards[#section.spellCards + 1] = card
         for ruleID, cell in pairs(card.ruleCells or {}) do section.ruleCells[ruleID] = cell end
-        rowY = rowY - cardHeight - 4
+        rowY = rowY - cardHeight - SPELL_ROW_GAP
     end
     function section:Reflow()
-        local nextY = -86
-        for _, card in ipairs(self.spellCards) do
+        local nextY = -SPELL_LIST_INSET
+        for index, card in ipairs(self.spellCards) do
             card:ClearAllPoints()
-            card:SetPoint("TOPLEFT", 10, nextY)
-            card:SetPoint("TOPRIGHT", -10, nextY)
+            card:SetPoint("TOPLEFT", SPELL_LIST_INSET, nextY)
+            card:SetPoint("TOPRIGHT", -SPELL_LIST_INSET, nextY)
             local cardHeight = card:Reflow()
-            nextY = nextY - cardHeight - 4
+            nextY = nextY - cardHeight
+            if index < #self.spellCards then nextY = nextY - SPELL_ROW_GAP end
         end
-        local sectionHeight = math.max(84, -nextY + 2)
+        local spellListHeight = math.max(1, -nextY + SPELL_LIST_INSET)
+        self.spellList:SetHeight(spellListHeight)
+        local sectionHeight = math.max(84, SPELL_LIST_TOP + spellListHeight + SPELL_LIST_INSET)
         self:SetHeight(sectionHeight)
         if ns.SpecSectionBottom then ns.SpecSectionBottom[specID] = ns.SpecSectionY - sectionHeight - 10 end
         if ns.SelectedOptionsSpec == specID and ns.OptionsContent then
@@ -1814,6 +2025,10 @@ function ns:ShowOptionsSpec(specID, preservedScrollPosition)
     if not self.SUPPORTED_SPECS[specID] then return end
     self.SelectedOptionsSpec=specID
     self:EnsureOptionsSpec(specID)
+    local soundSets = self.SoundSetWindow
+    if soundSets and soundSets:IsShown() and soundSets.SetSpec then
+        soundSets:SetSpec(specID)
+    end
     for id,section in pairs(self.SpecSections or {}) do section:SetShown(id==specID) end
     if self.OptionsContent and self.SpecSectionBottom and self.SpecSectionBottom[specID] then
         self.OptionsContent:SetHeight(-self.SpecSectionBottom[specID]+10)
@@ -1912,9 +2127,13 @@ function ns:CreateOptions()
     helpButton:SetPoint("RIGHT", header, "RIGHT", -142, 0)
     self.HelpButton = helpButton
 
+    -- Normal releases have no footer controls. Keep only enough clearance for
+    -- the resize grip; the wider debug footer is reserved dynamically when
+    -- the internal catalog tools are brought back.
+    local footerInset = DEBUG_SOUND_TOOLS_VISIBLE and 52 or 12
     local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -12)
-    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 52)
+    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, footerInset)
     local content = CreateFrame("Frame", nil, scroll)
     content:SetWidth(math.max(760, panel:GetWidth() - 50))
     scroll:SetScrollChild(content)

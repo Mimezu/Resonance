@@ -1,58 +1,68 @@
-# Resonance 1.14.1
+# Resonance
 
-## 1.14.1
+Give your spells a richer sound identity without replacing World of Warcraft's original audio.
 
-- Hotfix: explicitly clears dormant diagnostic and catalog-editor flags on login, so legacy saved settings cannot produce chat spam while their controls are unavailable.
+Resonance adds carefully chosen sound accents to real spell moments such as casting, release, impact, channeling, and aura changes. Each specialization has a ready-to-use sound set, and every sound can be changed, layered, delayed, previewed, or disabled.
 
-## 1.14.0
+[Download the latest release](https://github.com/Mimezu/Resonance/releases/latest/download/Resonance.zip)
 
-- Refined the responsive editor layout: moment cards fill the available width at first open, spell identity stacks are compact, and all panels use a single clean closed border.
-- Temporarily removed diagnostic and catalog-sorting controls from the player UI for this release. Existing sorting drafts and their implementation remain preserved for the next sound-catalog editing pass.
+![The Resonance spell editor](.github/readme/resonance-editor.png)
 
-Resonance adds configurable, event-driven spell ambience to every Retail specialization while leaving Blizzard's original spell audio untouched.
+## Make every specialization sound like yours
 
-## Design constraints
+- Enable or disable Resonance separately for each specialization.
+- Choose which spell moments receive an added sound.
+- Keep Blizzard's normal spell audio and layer Resonance over it.
+- Preview individual moments while you build your sound set.
+- Use the included Subtle, Medium, and Expressive presets as a starting point.
 
-- Uses curated Blizzard spell-file IDs; no audio assets are bundled.
-- Uses the SFX channel by default and never changes sound CVars.
-- No combat-log listener, polling loop, target inspection, protected actions, or gameplay automation.
-- Hero trees color important moments when their player-side cast or aura can be verified. Observable Apex talents have explicit capability-gated rules; pet-only and automatic effects are not given fake triggers.
-- Aura data is player-only, delta-driven, guarded for secret values, and fails closed.
-- Every gameplay moment has two base layers and supports up to eight optional layers, independent 0–5000 ms delays, and individual previews.
-- Every real spell also exposes an optional Casting moment that fires once when its cast, channel, or empower bar starts. Its added layers stop with the cast bar using a short 80 ms fade, and delayed layers are cancelled when a cast ends early.
-- The sound picker includes verified live and legacy class spells, martial effects, and iconic encounter one-shots; retired abilities are labeled Legacy.
-- A floating sound picker organizes assets by texture, including Physical, Poison & Toxin, and Metal & Machines alongside the magical families.
-- Search scans labels and provenance across the complete library, so boss, raid, dungeon, class, and spell names remain easy to find as the catalog grows.
-- Sound sets are saved per character and specialization. A player's first edit creates and activates one protected Personal set named `Character — Realm`. Editing a bundled preset immediately switches the edited working copy to that Personal set; later edits mark it changed but do not write into it until `Save changes` is chosen. Every spec also receives protected, hand-curated `Resonance Subtle`, `Resonance Medium`, and `Resonance Expressive` presets with distinct sound choices, delays, layers, and enabled moments.
-- Any built-in or personal sound set can be exported as a versioned, checksummed text code and safely imported by another character playing the same specialization. Imports never execute Lua, overwrite an existing set, or auto-load themselves.
-- Personal sets carry explicit schema, rule-catalog and sound-catalog versions. Stable rule IDs and numeric FileDataIDs survive category/label changes; ordered aliases and remaps adapt retired identifiers, missing sounds are preserved but fail closed, and new rules stay disabled in older personal mixes until chosen.
-- The developer-facing migration rules are documented in `COMPATIBILITY.md` so future releases keep this guarantee instead of relying on convention.
-- Presets change the actual enabled moments. There is no global density filter, priority threshold, or sound budget silently suppressing an explicitly enabled spell.
-- The compact editor uses real specialization icons, builds only the selected spec's controls, and places every moment for a spell horizontally on one card.
-- Resonance windows use slim purple/teal scrollbars with wheel, track-click, and drag support instead of Blizzard's large arrow controls.
-- The `? Help` window can be moved independently, while closing the Resonance editor closes it too.
-- Hero-tree names and capability gates come from the active trait subtree, preventing inactive hero talents from leaking into the selected build.
-- Apex detection retains both a selected talent's passive/base identity and any active replacement spell, covering multi-rank replacement talents such as Merithra's Blessing.
-- The temporary Misc family is retired. Six user-selected legacy accents were canonized into Arcane and Bronze; the other fourteen were removed.
-- The normal catalog is built for game-feel: compact casts, impacts, tails, sparks, physical hits, poison textures, mechanisms, and encounter accents that tolerate repetition.
-- Large boss signatures, recognizable machines, and creature calls live in **Novelty & Fun**, away from normal spell-layer browsing. The six user-retained UI accents are intentionally sorted into Arcane and Bronze & Time.
-- A separate **Boss Voices & Yells** library contains 115 English raid-boss dialogue, battle shout, scream, roar, and death-cry files from Battle for Azeroth onward. Each retained file was extracted from the local 12.1 CASC, decoded, verified to contain an audible signal, and measured at five seconds or less. Encrypted, missing, silent, and longer candidates are kept out of the live picker.
-- The encounter library includes decoded launch-raid accents from The Voidspire, The Dreamrift, and March on Quel'Danas, plus all three playable Nexus Daggers variants from Nexus-Princess Ky'veza.
-- Real player-class assets use `Class — Spell · Moment` labels even when an encounter reuses the same sound. Provenance stays in the searchable description.
-- No new dialogue, music, ambience, footsteps, or persistent loops are imported. Two previously exposed non-transient assets remain isolated in Novelty for saved-set compatibility.
-- Fine-grained families add sparkles, twinkles, chimes, crystal echoes/charges, embers, dust and short whooshes.
-- Solo audition mode temporarily routes Resonance to Dialog while muting SFX, music, and ambience, then restores the previous mix on disable or normal logout/reload.
-- Preservation includes a delayed bronze Echo afterimage, nature accents for Verdant Embrace and Emerald Blossom, separate deep Fire Breath charge/release cues, and a watery-nature Merithra's Blessing cast phrase.
+Changes are organized by character and specialization, so each build can have its own sound.
+
+## Browse and preview the sound library
+
+Open any sound slot to browse a curated library of World of Warcraft sounds. Search by name, spell, class, encounter, or description; browse sound families; and click any result to hear it immediately.
+
+![Browse and search the sound library](.github/readme/sound-picker.png)
+
+Favorite sounds you want to find again quickly. The Favorites view keeps your personal shortlist in one place.
+
+![Favorite sounds in the picker](.github/readme/sound-favorites.png)
+
+## Build layered spell accents
+
+Each spell moment can use several sound layers. Small millisecond delays let you build an echo, a trailing texture, or a more expressive sequence from multiple sounds.
+
+![Layer sounds and adjust their delays](.github/readme/sound-layers.png)
+
+## Save, switch, and share sound sets
+
+Start with a built-in preset or save your own set for a character and specialization. You can switch sets at any time, export one to share with a friend, or import a set someone sends you.
+
+![Built-in presets and personal sound sets](.github/readme/sound-sets.png)
+
+## Useful extras
+
+- A movable, resizable editor with a guided tutorial and built-in help.
+- Optional minimap and AddOn Compartment access.
+- Solo audition mode for listening to added sounds more clearly while editing.
+- Sound playback uses Blizzard audio already included with the game; Resonance does not bundle replacement audio files.
+
+## Installation
+
+1. Download `Resonance.zip` from the [latest release](https://github.com/Mimezu/Resonance/releases/latest).
+2. Extract the `Resonance` folder into `World of Warcraft/_retail_/Interface/AddOns/`.
+3. Enable Resonance on the character-selection AddOns screen.
+4. Type `/res` in game to open the editor.
 
 ## Commands
 
-- `/res` or `/res options` — open Settings.
-- `/res on`, `/res off`, `/res toggle` — master control.
-- `/res test` — preview the current major cue.
-- `/res solo` — toggle temporary solo audition mode.
+- `/res` — open Resonance.
+- `/res help` — open help.
+- `/res tutorial` — start the guided tutorial.
+- `/res on`, `/res off`, `/res toggle` — control the addon.
+- `/res test` — preview a current sound cue.
+- `/res solo` — toggle solo audition mode.
 - `/res minimap` — show or hide the minimap button.
-- `/res reset` — reset configuration after confirmation.
+- `/res reset` — reset Resonance after confirmation.
 
-## First test
-
-Enable Resonance for the character, log in, open a sound swatch, audition the catalog, then test at a target dummy before entering group content.
+Resonance is made for Retail World of Warcraft.
