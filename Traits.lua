@@ -50,7 +50,7 @@ function ns:ScanCapabilities()
         -- populated yet: inspect only the current specialization's subtrees
         -- and use the one explicitly marked active.
         if not activeSubTreeID and C_ClassTalents and C_ClassTalents.GetHeroTalentSpecsForClassSpec then
-            local specializationIndex = GetSpecialization and GetSpecialization()
+            local specializationIndex = GetSpecialization and SafeCall(GetSpecialization)
             local specID
             if self:IsSafeValue(specializationIndex) and type(specializationIndex) == "number" then
                 specID = GetSpecializationInfo and SafeCall(GetSpecializationInfo, specializationIndex)

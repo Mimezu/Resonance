@@ -50,26 +50,27 @@ function ns:ResolveSound(cue, paletteName)
     return nil, nil
 end
 
-local TONE_CUES = {
-    soft = "proc",
-    bright = "ready",
-    impact = "major",
-    apex = "apex",
-}
-
 function ns:ResolveRuleSounds(rule)
-    local sounds = {}
+    local cache = self.Runtime and self.Runtime.resolvedSoundCache
+    local cached = cache and cache[rule]
+    if cached then return cached end
+
+    local sounds, labels = {}, {}
     for index = 1, self:GetRuleLayerCount(rule) do
         local layer = self:GetLayerConfig(rule, index)
-        if layer.enabled and type(layer.soundID) == "number" and self.SoundByID[layer.soundID] then
+        local sound = type(layer.soundID) == "number" and self.SoundByID[layer.soundID]
+        if layer.enabled and sound then
             sounds[#sounds + 1] = {
                 id = layer.soundID,
                 key = self:GetSoundLabel(layer.soundID),
                 delay = (layer.delayMs or 0) / 1000,
-                kind = self.SoundByID[layer.soundID] and self.SoundByID[layer.soundID].kind or "file",
+                kind = sound.kind or "file",
             }
+            labels[#labels + 1] = sounds[#sounds].key
         end
     end
+    sounds.label = table.concat(labels, " + ")
+    if cache then cache[rule] = sounds end
     return sounds
 end
 
@@ -86,23 +87,42 @@ end
 
 local CASTING_FADE_OUT_SECONDS = 0.08
 
+local function TrackTimer(registry, timer)
+    if registry and timer then registry[timer] = true end
+end
+
+local function UntrackTimer(registry, timer)
+    if registry and timer then registry[timer] = nil end
+end
+
+function ns:CancelDelayedSoundTimers()
+    local runtime = self.Runtime
+    runtime.delayedSoundGeneration = (runtime.delayedSoundGeneration or 0) + 1
+    for timer in pairs(runtime.delayedSoundTimers or {}) do
+        if timer and timer.Cancel then pcall(timer.Cancel, timer) end
+    end
+    wipe(runtime.delayedSoundTimers)
+end
+
 function ns:StopCastingSounds(fadeSeconds)
     local runtime = self.Runtime
     runtime.castingSoundGeneration = (runtime.castingSoundGeneration or 0) + 1
+    runtime.castingCastGUID = nil
+    runtime.castingSpellID = nil
 
     for _, timer in ipairs(runtime.castingSoundTimers or {}) do
         if timer and timer.Cancel then
             pcall(timer.Cancel, timer)
         end
     end
-    runtime.castingSoundTimers = {}
+    wipe(runtime.castingSoundTimers)
 
     for _, handle in ipairs(runtime.castingSoundHandles or {}) do
         if handle and StopSound then
             pcall(StopSound, handle, fadeSeconds or CASTING_FADE_OUT_SECONDS)
         end
     end
-    runtime.castingSoundHandles = {}
+    wipe(runtime.castingSoundHandles)
 end
 
 local function TrackCastingHandle(handle)
@@ -129,17 +149,21 @@ function ns:PlayRule(rule, preview)
         return false, "unresolved sound"
     end
 
-    local soundKeys = {}
     local channel = self:GetPlaybackChannel()
     local trackCasting = not preview and rule.event == "CASTING_START"
     local castingGeneration
+    local previewTimers = preview and (self.Runtime.previewTimers or {}) or nil
+    local previewGeneration
+    if preview then
+        self.Runtime.previewTimers = previewTimers
+        self.Runtime.previewGeneration = self.Runtime.previewGeneration or 0
+        previewGeneration = self.Runtime.previewGeneration
+    end
     if trackCasting then
         self:StopCastingSounds(CASTING_FADE_OUT_SECONDS)
         castingGeneration = self.Runtime.castingSoundGeneration
     end
-    for _, sound in ipairs(sounds) do
-        soundKeys[#soundKeys + 1] = sound.key
-    end
+    local soundLabel = sounds.label or ""
     local played = false
     for _, sound in ipairs(sounds) do
         local delay = math.max(0, sound.delay or 0)
@@ -156,17 +180,38 @@ function ns:PlayRule(rule, preview)
                     end
                 end)
                 self.Runtime.castingSoundTimers[#self.Runtime.castingSoundTimers + 1] = timer
+            elseif preview then
+                local timer
+                timer = C_Timer.NewTimer(delay, function()
+                    UntrackTimer(previewTimers, timer)
+                    if self.Runtime.previewGeneration ~= previewGeneration then return end
+                    local accepted, handle = PlayResolvedSound(queuedSound, channel)
+                    if accepted and handle then
+                        self.Runtime.previewHandles = self.Runtime.previewHandles or {}
+                        self.Runtime.previewHandles[#self.Runtime.previewHandles + 1] = handle
+                    end
+                end)
+                TrackTimer(previewTimers, timer)
             else
-                C_Timer.After(delay, function()
+                local generation = self.Runtime.delayedSoundGeneration or 0
+                local timer
+                timer = C_Timer.NewTimer(delay, function()
+                    UntrackTimer(self.Runtime.delayedSoundTimers, timer)
+                    if self.Runtime.delayedSoundGeneration ~= generation then return end
                     local accepted = PlayResolvedSound(queuedSound, channel)
                     if ns.DB and ns.DB.debug then
                         ns:Print((accepted and "Played " or "Skipped ") .. rule.name .. " delayed layer [" .. queuedSound.key .. "]")
                     end
                 end)
+                TrackTimer(self.Runtime.delayedSoundTimers, timer)
             end
         else
             local accepted, handle = PlayResolvedSound(sound, channel)
             if trackCasting and accepted then TrackCastingHandle(handle) end
+            if preview and accepted and handle then
+                self.Runtime.previewHandles = self.Runtime.previewHandles or {}
+                self.Runtime.previewHandles[#self.Runtime.previewHandles + 1] = handle
+            end
             played = accepted or played
         end
     end
@@ -175,9 +220,9 @@ function ns:PlayRule(rule, preview)
     end
 
     if self.DB.debug then
-        self:Print((played and "Played " or "Skipped ") .. rule.name .. " [" .. table.concat(soundKeys, " + ") .. "]")
+        self:Print((played and "Played " or "Skipped ") .. rule.name .. " [" .. soundLabel .. "]")
     end
-    return played == true, table.concat(soundKeys, " + ")
+    return played == true, soundLabel, trackCasting
 end
 
 function ns:PreviewCue(cue)

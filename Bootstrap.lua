@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "1.15.0"
+ns.VERSION = "1.16.0"
 ns.COLOR = "|cff9d7cff"
 ns.SPEC_ORDER = {
     71, 72, 73,       -- Warrior
@@ -109,13 +109,29 @@ ns.DEFAULTS = DEFAULTS
 ns.Runtime = {
     capabilities = { hasSpellID = {}, rankBySpellID = {} },
     activeRules = {},
+    eventSpellRules = {},
     lastRulePlay = {},
     refreshQueued = false,
-    eventCounts = {},
     castingSoundGeneration = 0,
     castingSoundHandles = {},
     castingSoundTimers = {},
+    delayedSoundGeneration = 0,
+    delayedSoundTimers = {},
+    previewGeneration = 0,
+    previewTimers = {},
+    resolvedSoundCache = {},
 }
+
+-- Rule layers are edited in place, but profile loads/resets can replace the
+-- whole working tree. Keep the derived sound descriptors and any queued
+-- delayed playback in sync at the mutation boundary instead of waiting for
+-- the next zero-delay refresh callback.
+function ns:InvalidateRuntimeAudio(cancelDelayed)
+    self.Runtime.resolvedSoundCache = {}
+    if cancelDelayed and self.CancelDelayedSoundTimers then
+        self:CancelDelayedSoundTimers()
+    end
+end
 
 local function CopyDefaults(source)
     local result = {}
@@ -771,6 +787,12 @@ function ns:MarkSpecProfileDirty(specID)
     local store = self:GetSpecProfileStore(specID)
     if not store or type(store.working) ~= "table" then return end
 
+    -- Sound descriptors are derived from the working profile. Invalidate the
+    -- small runtime cache and cancel delayed playback immediately so a
+    -- preview or gameplay timer fired before the queued refresh cannot use a
+    -- stale layer or delay.
+    self:InvalidateRuntimeAudio(true)
+
     local loaded = store.loadedName and store.savedSets[store.loadedName]
     -- Presets are sources, never editable destinations. The first change to a
     -- bundled preset immediately moves the edited working copy under the
@@ -932,6 +954,7 @@ function ns:SaveSoundSet(specID, name)
     store.working = DeepCopy(store.savedSets[name])
     store.loadedName = name
     store.dirty = false
+    self:InvalidateRuntimeAudio(true)
     self:QueueRefresh("sound set saved")
     return true
 end
@@ -956,6 +979,7 @@ function ns:LoadSoundSet(specID, name)
     store.working = DeepCopy(store.savedSets[name])
     store.loadedName = name
     store.dirty = false
+    self:InvalidateRuntimeAudio(true)
     self:QueueRefresh("sound set loaded")
     return true
 end
@@ -1218,6 +1242,7 @@ function ns:ImportSoundSet(targetSpecID, exportText)
         if store.savedSets[importedName] ~= nil then return nil, "name-conflict" end
     end
     store.savedSets[importedName] = imported
+    self:InvalidateRuntimeAudio(false)
     self:QueueRefresh("sound set imported")
     return importedName
 end
@@ -1232,6 +1257,7 @@ function ns:ResetDatabase()
     self:InitializeCharacterProfiles()
     self.DB = ResonanceDB
     self.CharDB = ResonanceCharDB
+    self:InvalidateRuntimeAudio(true)
     self:QueueRefresh("reset")
     if self.RefreshOptions then
         self:RefreshOptions()

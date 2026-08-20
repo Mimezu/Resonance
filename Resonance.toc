@@ -2,7 +2,7 @@
 ## Title: Resonance
 ## Notes: Native, restrained sound accents for modern class gameplay.
 ## Author: Mimezu
-## Version: 1.15.0
+## Version: 1.16.0
 ## DefaultState: disabled
 ## SavedVariables: ResonanceDB
 ## SavedVariablesPerCharacter: ResonanceCharDB

@@ -27,6 +27,8 @@ ns.SoundCategories = {
     { id = "ember", label = "Ember & Dust", color = { 0.95, 0.53, 0.20 } },
     { id = "whoosh", label = "Short Whooshes", color = { 0.62, 0.82, 0.90 } },
 }
+ns.SoundCategoryByID = {}
+for _, category in ipairs(ns.SoundCategories) do ns.SoundCategoryByID[category.id] = category end
 
 local catalog = {
     -- Bronze / temporal
@@ -1156,21 +1158,35 @@ function ns:GetEffectiveSoundCategory(sound)
 end
 
 function ns:GetSoundsForCategory(category)
-    local result, seen = {}, {}
+    local database = self.DB
+    local draft = database and database.categoryDraft
+    local cache = self.Runtime and self.Runtime.soundCategoryCache
+    if cache and cache.database == database and cache.draft == draft then
+        return cache.categories[category] or {}
+    end
+    cache = { database = database, draft = draft, categories = {} }
+    local seen = {}
     for _, sound in ipairs(self.SoundCatalog) do
-        if not seen[sound.id] and self:GetEffectiveSoundCategory(sound) == category then
+        if not seen[sound.id] then
             seen[sound.id] = true
-            result[#result+1] = sound
+            local effectiveCategory = self:GetEffectiveSoundCategory(sound)
+            local result = cache.categories[effectiveCategory]
+            if not result then result = {}; cache.categories[effectiveCategory] = result end
+            result[#result + 1] = sound
         end
     end
-    table.sort(result, function(a,b) return a.label < b.label end)
-    return result
+    for _, result in pairs(cache.categories) do
+        table.sort(result, function(a,b) return a.label < b.label end)
+    end
+    self.Runtime.soundCategoryCache = cache
+    return cache.categories[category] or {}
 end
 
 function ns:MoveSoundToCategory(soundID, category)
     local sound = self.SoundByID[soundID]
-    if not sound or not category or category == "favorites" then return false end
+    if not sound or not self.SoundCategoryByID[category] or category == "favorites" then return false end
     self.DB.categoryDraft[soundID] = category == sound.category and nil or category
+    self.Runtime.soundCategoryCache = nil
     return true
 end
 
@@ -1282,10 +1298,11 @@ function ns:GetSuggestedSoundCategory(rule)
 end
 
 function ns:StopPreviewSound()
-    for _, timer in ipairs(self.Runtime.previewTimers or {}) do
+    self.Runtime.previewGeneration = (self.Runtime.previewGeneration or 0) + 1
+    for timer in pairs(self.Runtime.previewTimers or {}) do
         if timer and timer.Cancel then pcall(timer.Cancel, timer) end
     end
-    self.Runtime.previewTimers = nil
+    self.Runtime.previewTimers = {}
     for _, handle in ipairs(self.Runtime.previewHandles or {}) do
         if StopSound then pcall(StopSound, handle) end
     end

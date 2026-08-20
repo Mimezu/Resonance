@@ -608,7 +608,7 @@ function ns:CreateSoundPicker()
         picker:StopMovingOrSizing()
         picker.dragging = false
         picker.dropCategory = nil
-        if picker.dragBadge then picker.dragBadge:Hide() end
+        if picker.dragBadge then picker.dragBadge:SetScript("OnUpdate", nil); picker.dragBadge:Hide() end
         ns:StopPreviewSound()
         if ns.TutorialSignal then ns:TutorialSignal("sound-picker-closed") end
     end)
@@ -623,12 +623,12 @@ function ns:CreateSoundPicker()
     dragBadge.label:SetPoint("LEFT", 10, 0)
     dragBadge.label:SetPoint("RIGHT", -10, 0)
     dragBadge.label:SetJustifyH("LEFT")
-    dragBadge:SetScript("OnUpdate", function(self)
+    dragBadge._ticker = function(self)
         local scale = UIParent:GetEffectiveScale()
         local x, y = GetCursorPosition()
         self:ClearAllPoints()
         self:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x / scale + 14, y / scale + 12)
-    end)
+    end
     dragBadge:Hide()
     picker.dragBadge = dragBadge
 
@@ -730,7 +730,17 @@ function ns:CreateSoundPicker()
     search:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
     search:SetScript("OnTextChanged", function(self)
         searchHint:SetShown(self:GetText() == "")
-        if picker.RefreshSounds and picker:IsShown() then picker:RefreshSounds() end
+        picker.searchGeneration = (picker.searchGeneration or 0) + 1
+        local generation = picker.searchGeneration
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0.10, function()
+                if generation == picker.searchGeneration and picker.RefreshSounds and picker:IsShown() then
+                    picker:RefreshSounds()
+                end
+            end)
+        elseif picker.RefreshSounds and picker:IsShown() then
+            picker:RefreshSounds()
+        end
     end)
     AddTooltip(search, "Boolean sound search", "Spaces and AND require every term. OR or | accepts either term. Put exact phrases in quotes, for example: dawn AND spark, or \"Dawn of the Infinite\" OR bronze.")
     picker.search = search
@@ -745,6 +755,7 @@ function ns:CreateSoundPicker()
     picker.soundScroll = scroll
     picker.soundContent = content
     picker.soundButtons = {}
+    local SOUND_COLUMNS, SOUND_ROW_HEIGHT, SOUND_BUTTON_POOL = 3, 64, 36
 
     function picker:GetSelectedSoundIDs(includePending)
         local result = {}
@@ -772,6 +783,7 @@ function ns:CreateSoundPicker()
         self.dragging = true
         self.dropCategory = nil
         self.dragBadge.label:SetText(#self.dragIDs == 1 and button.sound.label or (#self.dragIDs .. " sounds selected"))
+        self.dragBadge:SetScript("OnUpdate", self.dragBadge._ticker)
         self.dragBadge:Show()
         self:RefreshCategoryButtons()
         self:RefreshSounds()
@@ -782,6 +794,7 @@ function ns:CreateSoundPicker()
         local dragged = self.dragIDs or {}
         self.dragging = false
         self.dropCategory = nil
+        self.dragBadge:SetScript("OnUpdate", nil)
         self.dragBadge:Hide()
         if categoryID and categoryID ~= "favorites" then
             for _, soundID in ipairs(dragged) do ns:MoveSoundToCategory(soundID, categoryID) end
@@ -795,9 +808,6 @@ function ns:CreateSoundPicker()
         if self.soundButtons[index] then return self.soundButtons[index] end
         local button = CreateFrame("Button", nil, content, "BackdropTemplate")
         button:SetSize(174, 58)
-        local col = (index - 1) % 3
-        local row = math.floor((index - 1) / 3)
-        button:SetPoint("TOPLEFT", col * 182, -row * 64)
         ApplyBackdrop(button, COLORS.cardAlt, {0.16,0.17,0.24,1})
         button.label = CreateText(button, "GameFontNormal", "")
         button.label:SetPoint("TOPLEFT", 9, -8); button.label:SetPoint("RIGHT", -8, 0); button.label:SetJustifyH("LEFT")
@@ -851,31 +861,20 @@ function ns:CreateSoundPicker()
         return button
     end
 
-    function picker:RefreshSounds()
-        local source = {}
-        local query = string.lower((self.search and self.search:GetText()) or "")
-        if query ~= "" then
-            local searchGroups = ParseSearchExpression(query)
-            local seen = {}
-            for _, sound in ipairs(ns.SoundCatalog) do
-                local haystack = sound.searchText or string.lower((sound.label or "") .. " " .. (sound.detail or ""))
-                if not seen[sound.id] and MatchesSearchExpression(haystack, searchGroups) then
-                    seen[sound.id] = true
-                    source[#source+1] = sound
-                end
-            end
-            table.sort(source, function(a,b) return a.label < b.label end)
-        elseif self.category == "favorites" then
-            for fileID, favorite in pairs(ns.DB.favorites) do
-                if favorite and ns.SoundByID[fileID] then source[#source+1] = ns.SoundByID[fileID] end
-            end
-            table.sort(source, function(a,b) return a.label < b.label end)
-        else
-            source = ns:GetSoundsForCategory(self.category)
-        end
-        for i = 1, math.max(#source, #self.soundButtons) do
-            local button = self:AcquireSoundButton(i)
-            local sound = source[i]
+    function picker:RefreshVisibleSounds()
+        local source = self.soundSource or {}
+        local query = self.soundQuery or ""
+        local offset = self.soundScroll and tonumber(self.soundScroll:GetVerticalScroll()) or 0
+        local firstRow = math.max(0, math.floor((offset or 0) / SOUND_ROW_HEIGHT) - 1)
+        local firstIndex = firstRow * SOUND_COLUMNS + 1
+        for poolIndex = 1, SOUND_BUTTON_POOL do
+            local button = self:AcquireSoundButton(poolIndex)
+            local sourceIndex = firstIndex + poolIndex - 1
+            local sound = source[sourceIndex]
+            button:ClearAllPoints()
+            local col = (sourceIndex - 1) % SOUND_COLUMNS
+            local row = math.floor((sourceIndex - 1) / SOUND_COLUMNS)
+            button:SetPoint("TOPLEFT", col * 182, -row * SOUND_ROW_HEIGHT)
             button.sound = sound
             if sound then
                 local marked = ns:IsSoundMarkedForDelete(sound.id)
@@ -906,7 +905,33 @@ function ns:CreateSoundPicker()
                 button:Hide()
             end
         end
-        self.soundContent:SetHeight(math.max(430, math.ceil(#source / 3) * 64))
+    end
+
+    function picker:RefreshSounds()
+        local source = {}
+        local query = string.lower((self.search and self.search:GetText()) or "")
+        if query ~= "" then
+            local searchGroups = ParseSearchExpression(query)
+            local seen = {}
+            for _, sound in ipairs(ns.SoundCatalog) do
+                local haystack = sound.searchText or string.lower((sound.label or "") .. " " .. (sound.detail or ""))
+                if not seen[sound.id] and MatchesSearchExpression(haystack, searchGroups) then
+                    seen[sound.id] = true
+                    source[#source+1] = sound
+                end
+            end
+            table.sort(source, function(a,b) return a.label < b.label end)
+        elseif self.category == "favorites" then
+            for fileID, favorite in pairs(ns.DB.favorites) do
+                if favorite and ns.SoundByID[fileID] then source[#source+1] = ns.SoundByID[fileID] end
+            end
+            table.sort(source, function(a,b) return a.label < b.label end)
+        else
+            source = ns:GetSoundsForCategory(self.category)
+        end
+        self.soundSource, self.soundQuery = source, query
+        self.soundContent:SetHeight(math.max(430, math.ceil(#source / SOUND_COLUMNS) * SOUND_ROW_HEIGHT))
+        self:RefreshVisibleSounds()
         self:RefreshCategoryButtons()
         self.selection:SetText(self.pendingID and ns:GetSoundLabel(self.pendingID) or "No sound selected")
         self.favorite:SetText(self.pendingID and ns.DB.favorites[self.pendingID] and "Unfavorite" or "Favorite")
@@ -922,6 +947,7 @@ function ns:CreateSoundPicker()
             and "Sorting: click • Ctrl-click multi • drag to category • green selected • gold moved • red delete • save in main footer."
             or "Choose a sound family or search every source, then click a swatch to hear it. Nothing is committed until OK.")
     end
+    scroll:HookScript("OnVerticalScroll", function() picker:RefreshVisibleSounds() end)
 
     function picker:ScrollCategoryIntoView(categoryID)
         if not categoryID or not self.categoryScroll then return end
@@ -948,18 +974,19 @@ function ns:CreateSoundPicker()
             return
         end
         local soundIndex
-        for index, button in ipairs(self.soundButtons or {}) do
-            if button:IsShown() and button.sound and button.sound.id == soundID then
+        for index, sound in ipairs(self.soundSource or {}) do
+            if sound.id == soundID then
                 soundIndex = index
                 break
             end
         end
         if not soundIndex then return end
-        local row = math.floor((soundIndex - 1) / 3)
-        local cardCenter = row * 64 + 29
+        local row = math.floor((soundIndex - 1) / SOUND_COLUMNS)
+        local cardCenter = row * SOUND_ROW_HEIGHT + 29
         local viewport = math.max(1, self.soundScroll:GetHeight())
         local maxScroll = math.max(0, tonumber(self.soundScroll:GetVerticalScrollRange()) or 0)
         self.soundScroll:SetVerticalScroll(math.max(0, math.min(maxScroll, cardCenter - viewport * 0.5)))
+        self:RefreshVisibleSounds()
         if self.soundScroll._resonanceUpdateScrollBar then
             self.soundScroll._resonanceUpdateScrollBar()
         end
@@ -1993,7 +2020,9 @@ end
 
 function ns:GetCurrentOptionsSpec()
     if GetSpecialization and GetSpecializationInfo then
-        local specializationIndex = GetSpecialization()
+        local specializationIndex
+        local indexOK, index = pcall(GetSpecialization)
+        if indexOK then specializationIndex = index end
         if specializationIndex then
             local ok, specID = pcall(GetSpecializationInfo, specializationIndex)
             if ok and self.SUPPORTED_SPECS[specID] then
@@ -2010,7 +2039,13 @@ end
 function ns:RebuildOptionsSpec(specID)
     local scrollPosition = self.OptionsScroll and self.OptionsScroll:GetVerticalScroll() or 0
     local old = self.SpecSections and self.SpecSections[specID]
-    if old then old:Hide() end
+    if old then
+        -- A layer edit rebuilds this section. Detach the retired frame tree so
+        -- repeated edits do not leave every previous spell-card hierarchy
+        -- attached to the live OptionsContent parent.
+        old:Hide()
+        old:SetParent(nil)
+    end
     local kept = {}
     for _, widget in ipairs(self.OptionWidgets or {}) do
         if widget._resSpecID ~= specID then kept[#kept + 1] = widget end
@@ -2051,8 +2086,32 @@ function ns:ShowOptionsSpec(specID, preservedScrollPosition)
     self:RefreshOptions()
 end
 
+function ns:RegisterSettingsLauncher()
+    if self.SettingsLauncherRegistered then return end
+    if Settings and Settings.RegisterCanvasLayoutCategory then
+        local launcher = CreateFrame("Frame", "ResonanceSettingsLauncher", UIParent)
+        launcher.name = "Resonance"
+        local launcherTitle = CreateText(launcher, "GameFontNormalHuge", "Resonance")
+        launcherTitle:SetPoint("TOPLEFT", 24, -24)
+        launcherTitle:SetTextColor(unpack(COLORS.accent))
+        local launcherText = CreateText(launcher, "GameFontHighlight", "Resonance uses a standalone window so every per-spell control remains visible.")
+        launcherText:SetPoint("TOPLEFT", launcherTitle, "BOTTOMLEFT", 0, -12)
+        local openButton = CreateButton(launcher, "Open Resonance", 180, function() ns:OpenOptions() end, true)
+        openButton:SetPoint("TOPLEFT", launcherText, "BOTTOMLEFT", 0, -20)
+        local category = Settings.RegisterCanvasLayoutCategory(launcher, "Resonance", "Resonance")
+        Settings.RegisterAddOnCategory(category)
+        self.SettingsCategoryID = (category.GetID and category:GetID()) or category.ID or "Resonance"
+        self.SettingsLauncher = launcher
+        self.SettingsLauncherRegistered = true
+    elseif InterfaceOptions_AddCategory then
+        -- The standalone window remains available through /res and the minimap button.
+        self.SettingsLauncherRegistered = true
+    end
+end
+
 function ns:CreateOptions()
     if self.OptionsPanel then return end
+    self:RegisterSettingsLauncher()
     self.OptionWidgets = {}
 
     local panel = CreateFrame("Frame", "ResonanceOptionsPanel", UIParent, "BackdropTemplate")
@@ -2237,22 +2296,6 @@ function ns:CreateOptions()
         UISpecialFrames[#UISpecialFrames + 1] = panel:GetName()
     end
 
-    if Settings and Settings.RegisterCanvasLayoutCategory then
-        local launcher = CreateFrame("Frame", "ResonanceSettingsLauncher", UIParent)
-        launcher.name = "Resonance"
-        local launcherTitle = CreateText(launcher, "GameFontNormalHuge", "Resonance")
-        launcherTitle:SetPoint("TOPLEFT", 24, -24)
-        launcherTitle:SetTextColor(unpack(COLORS.accent))
-        local launcherText = CreateText(launcher, "GameFontHighlight", "Resonance uses a standalone window so every per-spell control remains visible.")
-        launcherText:SetPoint("TOPLEFT", launcherTitle, "BOTTOMLEFT", 0, -12)
-        local openButton = CreateButton(launcher, "Open Resonance", 180, function() ns:OpenOptions() end, true)
-        openButton:SetPoint("TOPLEFT", launcherText, "BOTTOMLEFT", 0, -20)
-        local category = Settings.RegisterCanvasLayoutCategory(launcher, "Resonance", "Resonance")
-        Settings.RegisterAddOnCategory(category)
-        self.SettingsCategoryID = (category.GetID and category:GetID()) or category.ID or "Resonance"
-    elseif InterfaceOptions_AddCategory then
-        -- The standalone window remains available through /res and the minimap button.
-    end
 end
 
 function ns:OpenOptions()
@@ -2260,12 +2303,21 @@ function ns:OpenOptions()
         self:Print("The options window could not be built. Reload after updating Resonance.")
         return
     end
-    if not self.OptionsPanel then self:CreateOptions() end
+    if not self.OptionsPanel then
+        local ok, buildError = pcall(self.CreateOptions, self)
+        if not ok then
+            self.OptionsBuildError = buildError or true
+            if self.OptionsPanel then self.OptionsPanel:Hide() end
+            self:Print("Options UI failed to build; commands and gameplay sounds remain available.")
+            return
+        end
+    end
     self.SelectedOptionsSpec = self:GetCurrentOptionsSpec()
+    local wasShown = self.OptionsPanel:IsShown()
     self.OptionsPanel:Show()
-    -- Select the played specialization on every open.  This also refreshes
-    -- the just-created panel before its first visible frame.
-    self:ShowOptionsSpec(self.SelectedOptionsSpec)
+    -- OnShow performs the first layout/spec selection.  If the panel was
+    -- already visible, refresh the selected specialization explicitly.
+    if wasShown then self:ShowOptionsSpec(self.SelectedOptionsSpec) end
     self.OptionsPanel:Raise()
 end
 

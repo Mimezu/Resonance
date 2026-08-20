@@ -14,6 +14,18 @@ local Tutorial = {
 }
 ns.Tutorial = Tutorial
 
+local function SetTutorialRootShown(shown)
+    local root = Tutorial.root
+    if not root then return end
+    if shown then
+        if not root:GetScript("OnUpdate") then root:SetScript("OnUpdate", root._ticker) end
+        root:Show()
+    else
+        root:SetScript("OnUpdate", nil)
+        root:Hide()
+    end
+end
+
 local function TutorialDB()
     ns.DB.tutorial = type(ns.DB.tutorial) == "table" and ns.DB.tutorial or {}
     ns.DB.tutorial.completedVersion = tonumber(ns.DB.tutorial.completedVersion) or 0
@@ -209,13 +221,13 @@ local function CreateOverlay()
     coach.next:SetPoint("RIGHT", coach.action, "LEFT", -7, 0)
 
     root.elapsed = 0
-    root:SetScript("OnUpdate", function(_, elapsed)
+    root._ticker = function(_, elapsed)
         root.elapsed = root.elapsed + elapsed
         if root.elapsed >= 0.05 then
             root.elapsed = 0
             ns:RenderTutorial()
         end
-    end)
+    end
 
     local events = CreateFrame("Frame")
     events:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -224,13 +236,13 @@ local function CreateOverlay()
         if event == "PLAYER_REGEN_DISABLED" and Tutorial.active then
             Tutorial.paused = true
             Tutorial.pauseReason = "combat"
-            Tutorial.root:Hide()
+            SetTutorialRootShown(false)
             ns:Print("Tutorial paused during combat. It will resume when combat ends.")
         elseif event == "PLAYER_REGEN_ENABLED" and Tutorial.active and Tutorial.paused and Tutorial.pauseReason == "combat" then
             if ns.OptionsPanel and ns.OptionsPanel:IsShown() then
                 Tutorial.paused = false
                 Tutorial.pauseReason = nil
-                Tutorial.root:Show()
+                SetTutorialRootShown(true)
             else
                 Tutorial.pauseReason = "options-hidden"
             end
@@ -338,7 +350,7 @@ function ns:StartTutorial(restart)
     if TutorialDB().completedVersion >= TUTORIAL_VERSION and not restart then savedStep = 1 end
     if savedStep == 4 then savedStep = 3 end
     if savedStep == 8 then savedStep = 7 end
-    Tutorial.root:Show()
+    SetTutorialRootShown(true)
     self:SetTutorialStep(savedStep)
 end
 
@@ -346,7 +358,7 @@ function ns:PauseTutorial(reason)
     if not Tutorial.active then return end
     Tutorial.paused = true
     Tutorial.pauseReason = reason
-    if Tutorial.root then Tutorial.root:Hide() end
+    SetTutorialRootShown(false)
 end
 
 function ns:ResumeTutorialFromOptions()
@@ -373,7 +385,7 @@ function ns:ResumeTutorialFromOptions()
     Tutorial.paused = false
     Tutorial.pauseReason = nil
     if Tutorial.root then
-        Tutorial.root:Show()
+        SetTutorialRootShown(true)
         self:RenderTutorial()
     end
 end
@@ -394,7 +406,7 @@ function ns:StopTutorial(completed)
         if self.SoundPicker and self.SoundPicker:IsShown() then self.SoundPicker:Hide() end
         if self.SoundSetWindow and self.SoundSetWindow:IsShown() then self.SoundSetWindow:Hide() end
     end
-    if Tutorial.root then Tutorial.root:Hide() end
+    SetTutorialRootShown(false)
 end
 
 function ns:TutorialCanCommitSound(soundID)
