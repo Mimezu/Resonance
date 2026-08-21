@@ -61,7 +61,10 @@ jobs:
         shell: bash
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; keeping it unchanged."
+            # A corrected public build may keep its version while its ZIP is
+            # rebuilt. Replace the asset so the permanent latest-download URL
+            # always serves the current release commit.
+            gh release upload "$TAG" "Resonance.zip" --clobber
             exit 0
           fi
 
