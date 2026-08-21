@@ -32,7 +32,7 @@ local TOPICS = {
     {
         title = "Save & share",
         summary = "Sets belong to a character/spec",
-        body = "Your first edit creates and activates a |cff35d1bdPersonal set|r named for your character and realm. It starts with that first edit, but does not update itself after that.\n\nBuilt-in presets are read-only starting points: changing one immediately switches the edited copy to your Personal set. After any change, that active set is marked |cffffb84dChanged|r. Choose |cff9d7cffSave changes|r to write your current sounds into it. If you choose another set while it is Changed, Resonance warns you first so you can save or keep editing. Export a set to share it; import a friend's code on the matching spec.",
+        body = "Your first edit creates and activates a |cff35d1bdPersonal set|r named for your character and realm. It starts with that first edit, but does not update itself after that.\n\nBuilt-in presets are read-only starting points: changing one immediately switches the edited copy to your Personal set. After any change, that active set is marked |cffffb84dChanged|r. Choose |cff9d7cffSave changes|r to write your current sounds into it. If you choose another set while it is Changed, Resonance warns you first so you can save or keep editing. Export creates a compact share code; import a friend's code on the matching spec. Older RES1 share codes remain supported.",
     },
     {
         title = "Safety & limits",

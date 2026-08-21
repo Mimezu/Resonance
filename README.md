@@ -38,6 +38,8 @@ Each spell moment can use several sound layers. Small millisecond delays let you
 
 Start with a built-in preset or save your own set for a character and specialization. You can switch sets at any time, export one to share with a friend playing the same specialization, or import a set someone sends you.
 
+Exports use the compact, self-contained `RES3F` share format: it preserves spell-rule and sound IDs, layers, delays, and toggles without depending on a fixed catalog order. This keeps shared sets resilient when Resonance adds sounds or Blizzard changes spells. Older `RES1` share codes remain importable.
+
 ![Built-in presets and personal sound sets](.github/readme/sound-sets.png)
 
 ## Useful extras

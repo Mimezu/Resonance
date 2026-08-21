@@ -133,12 +133,38 @@ function ns:QueueRefresh(reason)
     end)
 end
 
-local function RouteSpellEvent(routeName, spellID)
+-- A current action can be an override of the spell ID stored in a rule (for
+-- example a talent/Apex replacement).  Exact IDs always win: the base-ID
+-- lookup is only a safe fallback when no rule owns the active spell itself.
+-- This avoids conflating two separately exposed moments while still allowing
+-- a base rule to survive a client-side spell morph.
+local function GetRouteRules(routeName, spellID)
     if not ns:IsSafeValue(spellID) or type(spellID) ~= "number" then
-        return false
+        return nil
     end
-    local rules = ns.Runtime.eventSpellRules[routeName]
-    rules = rules and rules[spellID]
+    local bySpell = ns.Runtime.eventSpellRules[routeName]
+    if not bySpell then
+        return nil
+    end
+    local rules = bySpell and bySpell[spellID]
+    if rules then
+        return rules
+    end
+
+    local getBaseSpell = C_Spell and C_Spell.GetBaseSpell
+    if type(getBaseSpell) ~= "function" then
+        return nil
+    end
+    local ok, baseSpellID = pcall(getBaseSpell, spellID)
+    if not ok or not ns:IsSafeValue(baseSpellID) or type(baseSpellID) ~= "number"
+        or baseSpellID <= 0 or baseSpellID == spellID then
+        return nil
+    end
+    return bySpell[baseSpellID]
+end
+
+local function RouteSpellEvent(routeName, spellID)
+    local rules = GetRouteRules(routeName, spellID)
     if not rules then return false end
     local played = false
     for _, rule in ipairs(rules) do
@@ -180,9 +206,7 @@ local function StopTrackedCasting(castGUID, spellID)
 end
 
 local function SpellMatchesRoute(routeName, spellID)
-    if not ns:IsSafeValue(spellID) or type(spellID) ~= "number" then return false end
-    local rules = ns.Runtime.eventSpellRules[routeName]
-    return rules ~= nil and rules[spellID] ~= nil
+    return GetRouteRules(routeName, spellID) ~= nil
 end
 
 local function ReadPlayerSpellInfo(api, spellIndex, flagIndex)

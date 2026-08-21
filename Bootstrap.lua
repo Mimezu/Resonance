@@ -1087,6 +1087,124 @@ local function TransferBoolean(value)
     return nil
 end
 
+-- RES3F is a compact, self-contained share format.  It deliberately carries
+-- stable rule IDs and FileDataIDs rather than catalog indexes: an import can
+-- still be read after a later catalog reorder, a renamed rule, or a Blizzard
+-- spell prune.  Human labels are only included as a fallback for sounds that
+-- are already absent from this client catalog.
+local TRANSFER64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+local TRANSFER64_DECODE = {}
+for index = 1, #TRANSFER64_ALPHABET do
+    TRANSFER64_DECODE[TRANSFER64_ALPHABET:sub(index, index)] = index - 1
+end
+
+local function TransferWriteVarUInt(parts, value)
+    value = math.floor(tonumber(value) or 0)
+    if value < 0 or value > 2147483647 then return false end
+    repeat
+        local byte = value % 128
+        value = math.floor(value / 128)
+        if value > 0 then byte = byte + 128 end
+        parts[#parts + 1] = string.char(byte)
+    until value == 0
+    return true
+end
+
+local function TransferReadVarUInt(value, position)
+    local result, multiplier = 0, 1
+    for _ = 1, 5 do
+        local byte = string.byte(value, position)
+        if not byte then return nil end
+        position = position + 1
+        result = result + (byte % 128) * multiplier
+        if byte < 128 then
+            if result > 2147483647 then return nil end
+            return result, position
+        end
+        multiplier = multiplier * 128
+    end
+    return nil
+end
+
+local function TransferWriteString(parts, value, maximum)
+    value = tostring(value or "")
+    if maximum and #value > maximum then return false end
+    if not TransferWriteVarUInt(parts, #value) then return false end
+    parts[#parts + 1] = value
+    return true
+end
+
+local function TransferReadString(value, position, maximum)
+    local length
+    length, position = TransferReadVarUInt(value, position)
+    if not length or (maximum and length > maximum) or position + length - 1 > #value then return nil end
+    return value:sub(position, position + length - 1), position + length
+end
+
+local function TransferEncode64(value)
+    local encoded, length = {}, #value
+    for position = 1, length, 3 do
+        local first = string.byte(value, position) or 0
+        local second = string.byte(value, position + 1) or 0
+        local third = string.byte(value, position + 2) or 0
+        encoded[#encoded + 1] = TRANSFER64_ALPHABET:sub(math.floor(first / 4) + 1, math.floor(first / 4) + 1)
+        encoded[#encoded + 1] = TRANSFER64_ALPHABET:sub((first % 4) * 16 + math.floor(second / 16) + 1, (first % 4) * 16 + math.floor(second / 16) + 1)
+        if position + 1 <= length then
+            encoded[#encoded + 1] = TRANSFER64_ALPHABET:sub((second % 16) * 4 + math.floor(third / 64) + 1, (second % 16) * 4 + math.floor(third / 64) + 1)
+        end
+        if position + 2 <= length then
+            encoded[#encoded + 1] = TRANSFER64_ALPHABET:sub(third % 64 + 1, third % 64 + 1)
+        end
+    end
+    return table.concat(encoded)
+end
+
+local function TransferDecode64(value)
+    if type(value) ~= "string" or #value == 0 or #value % 4 == 1 then return nil end
+    local decoded, position = {}, 1
+    while position <= #value do
+        local first = TRANSFER64_DECODE[value:sub(position, position)]
+        local second = TRANSFER64_DECODE[value:sub(position + 1, position + 1)]
+        local third = position + 2 <= #value and TRANSFER64_DECODE[value:sub(position + 2, position + 2)] or nil
+        local fourth = position + 3 <= #value and TRANSFER64_DECODE[value:sub(position + 3, position + 3)] or nil
+        if first == nil or second == nil or (position + 2 <= #value and third == nil) or (position + 3 <= #value and fourth == nil) then
+            return nil
+        end
+        decoded[#decoded + 1] = string.char(first * 4 + math.floor(second / 16))
+        if third ~= nil then
+            decoded[#decoded + 1] = string.char((second % 16) * 16 + math.floor(third / 4))
+        end
+        if fourth ~= nil then
+            decoded[#decoded + 1] = string.char((third % 4) * 64 + fourth)
+        end
+        position = position + 4
+    end
+    return table.concat(decoded)
+end
+
+local function TransferCommonPrefix(left, right)
+    local maximum = math.min(#left, #right)
+    local index = 0
+    while index < maximum and left:byte(index + 1) == right:byte(index + 1) do
+        index = index + 1
+    end
+    return index
+end
+
+local function TransferSetName(store, name)
+    local importedName = name
+    if store.savedSets[importedName] == nil then return importedName end
+    local suffixText = " (Imported)"
+    importedName = name:sub(1, 32 - #suffixText) .. suffixText
+    local suffix = 2
+    while store.savedSets[importedName] ~= nil and suffix < 100 do
+        suffixText = " (Imported " .. suffix .. ")"
+        importedName = name:sub(1, 32 - #suffixText) .. suffixText
+        suffix = suffix + 1
+    end
+    return store.savedSets[importedName] == nil and importedName or nil
+end
+
 function ns:ExportSoundSet(specID, name)
     local store = self:GetSpecProfileStore(specID)
     local source = store and store.savedSets and store.savedSets[name]
@@ -1104,40 +1222,72 @@ function ns:ExportSoundSet(specID, name)
     end
     table.sort(ruleIDs)
 
-    local encodedRules = {}
+    local encoded = {}
+    if not TransferWriteVarUInt(encoded, 1) -- RES3F payload revision
+        or not TransferWriteVarUInt(encoded, math.floor(tonumber(specID) or 0))
+        or not TransferWriteVarUInt(encoded, math.floor(tonumber(snapshot.schemaVersion) or self.PROFILE_SCHEMA_VERSION))
+        or not TransferWriteVarUInt(encoded, math.floor(tonumber(snapshot.ruleCatalogVersion) or self.RULE_CATALOG_VERSION))
+        or not TransferWriteVarUInt(encoded, math.floor(tonumber(snapshot.soundCatalogVersion) or self.SOUND_CATALOG_VERSION))
+        or not TransferWriteString(encoded, name, 96)
+        or not TransferWriteVarUInt(encoded, #ruleIDs) then
+        return nil, "invalid"
+    end
+
+    local previousRuleID = ""
     for _, ruleID in ipairs(ruleIDs) do
         local config = snapshot.rules[ruleID]
         local count = math.max(2, math.min(self.MAX_RULE_LAYERS or 8, math.floor(tonumber(config.layerCount) or 2)))
-        local fields = { TransferEncode(ruleID), config.enabled == true and "1" or "0", tostring(count) }
+        local prefixLength = TransferCommonPrefix(previousRuleID, ruleID)
+        local suffix = ruleID:sub(prefixLength + 1)
+        if not TransferWriteVarUInt(encoded, prefixLength) or not TransferWriteString(encoded, suffix, 128)
+            or not TransferWriteVarUInt(encoded, (count - 2) * 2 + (config.enabled == true and 1 or 0)) then
+            return nil, "invalid"
+        end
         for index = 1, count do
             local layer = type(config.layers) == "table" and config.layers[index] or nil
             local soundID = layer and tonumber(layer.soundID) or nil
             local sound = soundID and self.SoundByID and self.SoundByID[soundID]
             local kind = (layer and layer.soundKind) or (sound and sound.kind) or "file"
             local label = (layer and layer.soundLabel) or (sound and sound.label) or ""
-            fields[#fields + 1] = table.concat({
-                layer and layer.enabled == true and "1" or "0",
-                tostring(soundID and math.floor(soundID) or 0),
-                tostring(math.max(0, math.min(5000, math.floor(layer and tonumber(layer.delayMs) or 0)))),
-                kind == "kit" and "k" or "f",
-                TransferEncode(label),
-            }, ",")
+            soundID = soundID and math.floor(soundID) or 0
+            local delayMs = math.max(0, math.min(5000, math.floor(layer and tonumber(layer.delayMs) or 0)))
+            local includeFallbackLabel = soundID > 0 and not sound and label ~= ""
+            local hasSoundState = soundID > 0 or delayMs > 0 or includeFallbackLabel
+            local flags = (layer and layer.enabled == true and 1 or 0)
+                + (kind == "kit" and 2 or 0)
+                + (includeFallbackLabel and 4 or 0)
+                + (hasSoundState and 8 or 0)
+            if not TransferWriteVarUInt(encoded, flags) then return nil, "invalid" end
+            if hasSoundState then
+                if not TransferWriteVarUInt(encoded, soundID) or not TransferWriteVarUInt(encoded, delayMs) then return nil, "invalid" end
+            end
+            if includeFallbackLabel and not TransferWriteString(encoded, label, 128) then return nil, "invalid" end
         end
-        encodedRules[#encodedRules + 1] = table.concat(fields, "~")
+        previousRuleID = ruleID
     end
-
-    local body = table.concat({
-        tostring(math.floor(tonumber(specID) or 0)),
-        tostring(math.floor(tonumber(snapshot.schemaVersion) or self.PROFILE_SCHEMA_VERSION)),
-        tostring(math.floor(tonumber(snapshot.ruleCatalogVersion) or self.RULE_CATALOG_VERSION)),
-        tostring(math.floor(tonumber(snapshot.soundCatalogVersion) or self.SOUND_CATALOG_VERSION)),
-        TransferEncode(name),
-        table.concat(encodedRules, ";"),
-    }, "|")
-    return "RES1:" .. TransferChecksum(body) .. ":" .. body
+    local body = table.concat(encoded)
+    return "RES3F:" .. TransferChecksum(body) .. ":" .. TransferEncode64(body)
 end
 
-function ns:ImportSoundSet(targetSpecID, exportText)
+local function CommitImportedSoundSet(self, targetSpecID, name, imported)
+    FreezeProfileSet(imported, targetSpecID, true)
+    NormalizeProfileSet(imported, false)
+    imported.builtin = nil
+    imported.builtinVersion = nil
+    imported.preset = nil
+    imported.savedAt = GetServerTime and GetServerTime() or 0
+
+    local store = self:GetSpecProfileStore(targetSpecID)
+    if not store then return nil, "invalid" end
+    local importedName = TransferSetName(store, name)
+    if not importedName then return nil, "name-conflict" end
+    store.savedSets[importedName] = imported
+    self:InvalidateRuntimeAudio(false)
+    self:QueueRefresh("sound set imported")
+    return importedName
+end
+
+local function ImportRes1SoundSet(self, targetSpecID, exportText)
     if type(exportText) ~= "string" then return nil, "invalid" end
     exportText = exportText:match("^%s*(.-)%s*$") or ""
     if #exportText == 0 or #exportText > 100000 then return nil, "invalid" end
@@ -1220,31 +1370,107 @@ function ns:ImportSoundSet(targetSpecID, exportText)
     end
     if ruleCount == 0 then return nil, "invalid" end
 
-    FreezeProfileSet(imported, targetSpecID, true)
-    NormalizeProfileSet(imported, false)
-    imported.builtin = nil
-    imported.builtinVersion = nil
-    imported.preset = nil
-    imported.savedAt = GetServerTime and GetServerTime() or 0
+    return CommitImportedSoundSet(self, targetSpecID, name, imported)
+end
 
-    local store = self:GetSpecProfileStore(targetSpecID)
-    if not store then return nil, "invalid" end
-    local importedName = name
-    if store.savedSets[importedName] ~= nil then
-        local suffixText = " (Imported)"
-        importedName = name:sub(1, 32 - #suffixText) .. suffixText
-        local suffix = 2
-        while store.savedSets[importedName] ~= nil and suffix < 100 do
-            suffixText = " (Imported " .. suffix .. ")"
-            importedName = name:sub(1, 32 - #suffixText) .. suffixText
-            suffix = suffix + 1
-        end
-        if store.savedSets[importedName] ~= nil then return nil, "name-conflict" end
+local function ImportRes3FullSoundSet(self, targetSpecID, exportText)
+    local checksum, encodedBody = exportText:match("^RES3F:([%x]+):([A-Za-z0-9%-%_]+)$")
+    if not checksum or not encodedBody then return nil, "invalid" end
+    local body = TransferDecode64(encodedBody)
+    if not body or string.upper(checksum) ~= TransferChecksum(body) then return nil, "checksum" end
+
+    local position = 1
+    local revision, sourceSpecID, schemaNumber, ruleCatalogNumber, soundCatalogNumber
+    revision, position = TransferReadVarUInt(body, position)
+    sourceSpecID, position = TransferReadVarUInt(body, position)
+    schemaNumber, position = TransferReadVarUInt(body, position)
+    ruleCatalogNumber, position = TransferReadVarUInt(body, position)
+    soundCatalogNumber, position = TransferReadVarUInt(body, position)
+    if revision ~= 1 or not sourceSpecID or not schemaNumber or not ruleCatalogNumber or not soundCatalogNumber then
+        return nil, "invalid"
     end
-    store.savedSets[importedName] = imported
-    self:InvalidateRuntimeAudio(false)
-    self:QueueRefresh("sound set imported")
-    return importedName
+    targetSpecID = tonumber(targetSpecID)
+    if sourceSpecID ~= targetSpecID then return nil, "wrong-spec", sourceSpecID end
+    if schemaNumber > 1000000 or ruleCatalogNumber > 1000000 or soundCatalogNumber > 1000000 then
+        return nil, "invalid"
+    end
+
+    local name, ruleCount
+    name, position = TransferReadString(body, position, 96)
+    ruleCount, position = TransferReadVarUInt(body, position)
+    if not name or not ruleCount or ruleCount < 1 or ruleCount > 500 then return nil, "invalid" end
+    name = name:match("^%s*(.-)%s*$") or ""
+    if name == "" then name = "Imported set" end
+    name = name:sub(1, 32)
+
+    local imported = {
+        rules = {},
+        schemaVersion = schemaNumber,
+        ruleCatalogVersion = ruleCatalogNumber,
+        soundCatalogVersion = soundCatalogNumber,
+        ruleFallback = "disabled",
+    }
+    local previousRuleID = ""
+    for _ = 1, ruleCount do
+        local prefixLength, suffix, packedConfig
+        prefixLength, position = TransferReadVarUInt(body, position)
+        suffix, position = TransferReadString(body, position, 128)
+        packedConfig, position = TransferReadVarUInt(body, position)
+        if prefixLength == nil or not suffix or packedConfig == nil or prefixLength > #previousRuleID or packedConfig > 13 then
+            return nil, "invalid"
+        end
+        local ruleID = previousRuleID:sub(1, prefixLength) .. suffix
+        if ruleID == "" or #ruleID > 128 or imported.rules[ruleID] then return nil, "invalid" end
+        local enabled = packedConfig % 2 == 1
+        local layerCount = math.floor(packedConfig / 2) + 2
+        if layerCount > (self.MAX_RULE_LAYERS or 8) then return nil, "invalid" end
+
+        local config = { enabled = enabled, layerCount = layerCount, layers = {} }
+        for index = 1, layerCount do
+            local flags
+            flags, position = TransferReadVarUInt(body, position)
+            if flags == nil or flags > 15 then return nil, "invalid" end
+            local layerEnabled = flags % 2 == 1
+            local soundKind = math.floor(flags / 2) % 2 == 1 and "kit" or "file"
+            local hasFallbackLabel = math.floor(flags / 4) % 2 == 1
+            local hasSoundState = math.floor(flags / 8) % 2 == 1
+            if hasFallbackLabel and not hasSoundState then return nil, "invalid" end
+            local soundID, delayMs, label = 0, 0, nil
+            if hasSoundState then
+                soundID, position = TransferReadVarUInt(body, position)
+                delayMs, position = TransferReadVarUInt(body, position)
+                if soundID == nil or delayMs == nil or delayMs > 5000 then return nil, "invalid" end
+            end
+            if hasFallbackLabel then
+                label, position = TransferReadString(body, position, 128)
+                if not label or label == "" then return nil, "invalid" end
+            end
+            config.layers[index] = {
+                enabled = layerEnabled,
+                soundID = soundID > 0 and soundID or false,
+                delayMs = delayMs,
+                soundKind = soundKind,
+                soundLabel = label,
+            }
+        end
+        imported.rules[ruleID] = config
+        previousRuleID = ruleID
+    end
+    if position <= #body then return nil, "invalid" end
+    return CommitImportedSoundSet(self, targetSpecID, name, imported)
+end
+
+function ns:ImportSoundSet(targetSpecID, exportText)
+    if type(exportText) ~= "string" then return nil, "invalid" end
+    exportText = exportText:match("^%s*(.-)%s*$") or ""
+    if #exportText == 0 or #exportText > 100000 then return nil, "invalid" end
+    if exportText:match("^RES3F:") then
+        return ImportRes3FullSoundSet(self, targetSpecID, exportText)
+    end
+    if exportText:match("^RES1:") then
+        return ImportRes1SoundSet(self, targetSpecID, exportText)
+    end
+    return nil, "invalid"
 end
 
 function ns:ResetDatabase()
