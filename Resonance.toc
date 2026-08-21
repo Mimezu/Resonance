@@ -3,7 +3,7 @@
 ## Notes: Native, restrained sound accents for modern class gameplay.
 ## Author: Mimezu
 ## Version: 1.0.0
-## X-Resonance-ReleaseBuild: 2
+## X-Resonance-ReleaseBuild: 3
 ## DefaultState: disabled
 ## SavedVariables: ResonanceDB
 ## SavedVariablesPerCharacter: ResonanceCharDB

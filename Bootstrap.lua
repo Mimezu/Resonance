@@ -1,7 +1,8 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "1.16.0"
+local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+ns.VERSION = (type(getMetadata) == "function" and getMetadata("Resonance", "Version")) or "1.0.0"
 ns.COLOR = "|cff9d7cff"
 ns.SPEC_ORDER = {
     71, 72, 73,       -- Warrior
