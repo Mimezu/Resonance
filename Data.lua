@@ -212,7 +212,7 @@ local names = {
     pres_fire_breath_release={"Fire Breath","Release"},
     pres_emerald_blossom={"Emerald Blossom","Cast"}, pres_dream_breath={"Dream Breath","Release"},
     pres_temporal_anomaly={"Temporal Anomaly","Cast"}, pres_stasis_capture={"Stasis","Capture"},
-    pres_stasis_release={"Stasis","Release"}, pres_rewind={"Rewind","Release"},
+    pres_stasis_release={"Stasis","Cast"}, pres_rewind={"Rewind","Cast"},
     pres_dream_flight={"Dream Flight","Cast"}, pres_merithra={"Merithra's Blessing","Cast"},
     dev_fire_breath={"Fire Breath","Release"}, dev_eternity_surge={"Eternity Surge","Release"},
     arcane_prismatic_bolt={"Prismatic Bolt (Apex)","Cast"},
@@ -221,6 +221,11 @@ for _, rule in ipairs(rules) do
     local explicit = names[rule.id]
     rule.spell = rule.spell or (explicit and explicit[1]) or rule.name
     rule.moment = rule.moment or (explicit and explicit[2]) or "Cast"
+    -- “Release” is reserved for a completed empowered spell. Ordinary spells
+    -- always resolve through UNIT_SPELLCAST_SUCCEEDED and present as Cast.
+    if rule.moment == "Release" and rule.event ~= "EMPOWER_STOP" then
+        rule.moment = "Cast"
+    end
     rule.defaultSounds = rule.defaultSounds or defaultCueSounds[rule.cue] or defaultCueSounds.proc
 end
 
