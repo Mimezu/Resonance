@@ -11,6 +11,8 @@ local COLORS = {
 }
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
+-- Sampled from the top petal of Resonance's supplied flower mark.
+local PLAY_PINK = { 0.94, 0.50, 0.74, 1 }
 
 -- The catalog editor is deliberately tucked away for the 1.14 release.
 -- Keep both the SavedVariables and implementation intact: switching this
@@ -637,7 +639,7 @@ function ns:CreateSoundPicker()
     local title = CreateText(picker, "GameFontNormalHuge", "Sound picker")
     title:SetPoint("TOPLEFT", 18, -14)
     title:SetTextColor(unpack(COLORS.accent))
-    local help = CreateText(picker, "GameFontHighlightSmall", "Choose a sound family or search every source, then click a swatch to hear it. Nothing is committed until OK.")
+    local help = CreateText(picker, "GameFontHighlightSmall", "Browse a category or search. Click a sound to preview it, then choose Okay to apply it.")
     help:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -7)
     help:SetPoint("RIGHT", picker, "RIGHT", -20, 0)
     help:SetJustifyH("LEFT")
@@ -742,7 +744,7 @@ function ns:CreateSoundPicker()
             picker:RefreshSounds()
         end
     end)
-    AddTooltip(search, "Boolean sound search", "Spaces and AND require every term. OR or | accepts either term. Put exact phrases in quotes, for example: dawn AND spark, or \"Dawn of the Infinite\" OR bronze.")
+    AddTooltip(search, "Sound search", "Spaces and AND require every term. OR or | accepts either term. Quote exact phrases. Example: dawn AND spark.")
     picker.search = search
 
     local scroll = CreateFrame("ScrollFrame", nil, picker, "UIPanelScrollFrameTemplate")
@@ -945,7 +947,7 @@ function ns:CreateSoundPicker()
         self.selection:SetShown(not IsSoundSortingDebugActive())
         self.help:SetText(IsSoundSortingDebugActive()
             and "Sorting: click • Ctrl-click multi • drag to category • green selected • gold moved • red delete • save in main footer."
-            or "Choose a sound family or search every source, then click a swatch to hear it. Nothing is committed until OK.")
+            or "Browse a category or search. Click a sound to preview it, then choose Okay to apply it.")
     end
     scroll:HookScript("OnVerticalScroll", function() picker:RefreshVisibleSounds() end)
 
@@ -1110,16 +1112,16 @@ local function CreateMomentCell(parent, rule, cellHeight)
         if ns.TutorialSignal then ns:TutorialSignal("moment-previewed", rule.id) end
     end, true)
     hearAdded:SetPoint("TOPRIGHT", -4, -3)
-    hearAdded:SetBackdropColor(0.42, 0.27, 0.04, 1)
-    hearAdded:SetBackdropBorderColor(0.96, 0.66, 0.16, 0.95)
+    hearAdded:SetBackdropColor(0.30, 0.09, 0.22, 1)
+    hearAdded:SetBackdropBorderColor(unpack(PLAY_PINK))
     local playIcon = hearAdded:CreateTexture(nil, "ARTWORK")
     playIcon:SetSize(12, 12)
     playIcon:SetPoint("CENTER", 1, 0)
     playIcon:SetAtlas("common-icon-forwardarrow", false)
-    playIcon:SetVertexColor(1, 1, 1, 1)
+    playIcon:SetVertexColor(unpack(PLAY_PINK))
     hearAdded:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Preview added sounds", unpack(COLORS.accent))
+        GameTooltip:SetText("Preview layers", unpack(COLORS.accent))
         local configured = 0
         for layerIndex = 1, ns:GetRuleLayerCount(rule) do
             local layer = ns:GetLayerConfig(rule, layerIndex)
@@ -1134,16 +1136,16 @@ local function CreateMomentCell(parent, rule, cellHeight)
             end
         end
         if configured == 0 then
-            GameTooltip:AddLine("No enabled sound layers are configured.", COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], true)
+            GameTooltip:AddLine("No layers are enabled.", COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], true)
         end
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Plays only the sounds Resonance adds, not the spell's original game audio.", COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], true)
+        GameTooltip:AddLine("Previews Resonance layers only.", COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], true)
         GameTooltip:Show()
     end)
     hearAdded:SetScript("OnLeave", GameTooltip_Hide)
     cell.preview = hearAdded
 
-    AddTooltip(hearAdded, "Preview added sounds", "Plays this moment's enabled Resonance layers and their delays. It does not play Blizzard's original spell sound.")
+    AddTooltip(hearAdded, "Preview layers", "Previews this moment's enabled layers and delays. Blizzard's original spell audio is not included.")
 
     local function LayerLine(layerIndex, y)
         local layerCheck = CreateModernCheck(cell, 15)
@@ -1205,7 +1207,7 @@ local function CreateMomentCell(parent, rule, cellHeight)
             end)
             remove:SetHeight(20)
             remove:SetPoint("LEFT", delay, "RIGHT", 3, 0)
-            AddTooltip(remove, "Remove layer", "Removes this added sound layer and shifts later layers upward.")
+            AddTooltip(remove, "Remove layer", "Removes this layer. Later layers move up.")
             cell.removeButtons[layerIndex] = remove
         end
         RegisterOptionWidget({refresh=function()
@@ -1228,11 +1230,11 @@ local function CreateMomentCell(parent, rule, cellHeight)
     addLayer:SetHeight(20)
     addLayer:SetPoint("BOTTOMLEFT", 4, 4)
     addLayer:SetEnabled(ns:GetRuleLayerCount(rule) < ns.MAX_RULE_LAYERS)
-    AddTooltip(addLayer, "Add sound layer", "Adds another independently selectable sound and delay. Up to " .. ns.MAX_RULE_LAYERS .. " layers per moment.")
+    AddTooltip(addLayer, "Add sound layer", "Adds a sound and delay. Up to " .. ns.MAX_RULE_LAYERS .. " layers per moment.")
     cell.addLayer = addLayer
     function cell:ResizeForCard(width, height)
         self:SetSize(width, height)
-        for layerIndex, swatch in ipairs(self.swatches) do
+        for _, swatch in ipairs(self.swatches) do
             -- Always reserve the trailing remove-button column. The × only
             -- appears on added layers, but every delay stays in the same
             -- vertical column instead of shifting when a layer is added.
@@ -1276,6 +1278,20 @@ local function CreateSpellCard(parent, spellName, spellRules, y)
     -- spell record, while preserving enough width for a wrapped spell name.
     rail:SetWidth(MOMENT_CONTENT_LEFT - 8)
     ApplyBackdrop(rail, { 0.035, 0.04, 0.065, 0.88 }, { 0.18, 0.13, 0.30, 0.90 })
+
+    -- Hearthstone cards are shown only when the corresponding item or toy is
+    -- available to this character. Hover the identity rail for its context.
+    local hearthstoneRule
+    for _, rule in ipairs(spellRules) do
+        if rule.hearthstoneItemID then
+            hearthstoneRule = rule
+            break
+        end
+    end
+    if hearthstoneRule and hearthstoneRule.description then
+        rail:EnableMouse(true)
+        AddTooltip(rail, spellName, hearthstoneRule.description)
+    end
 
     local identity = CreateFrame("Frame", nil, rail)
     identity:SetSize(math.max(84, MOMENT_CONTENT_LEFT - 30), 100)
@@ -1389,7 +1405,7 @@ local function BuildGeneral(content, y)
         enabled = CreateSettingsBandToggle(section, "Enable Resonance", nil,
             function() return ns.DB.enabled end,
             function(value) ns.DB.enabled = value ns:QueueRefresh("master") end)
-        solo = CreateSettingsBandToggle(section, "Solo added sounds", "Route Resonance to Dialog and mute the game mix.",
+        solo = CreateSettingsBandToggle(section, "Solo added sounds", "Routes layers to Dialog and mutes SFX, music, and ambience.",
             function() return ns.DB.soloMode end,
             function(value) ns:SetSoloMode(value) end)
         minimap = CreateSettingsBandToggle(section, "Show minimap button", nil,
@@ -1402,7 +1418,7 @@ local function BuildGeneral(content, y)
         minimap = CreateCheckRow(section, "Show minimap button", nil,
             function() return not ns.DB.minimap.hide end,
             function(value) ns.DB.minimap.hide = not value ns:UpdateMinimapButton() end)
-        solo = CreateCheckRow(section, "Solo added sounds", "Routes Resonance to Dialog and temporarily mutes SFX, music and ambience.",
+        solo = CreateCheckRow(section, "Solo added sounds", "Routes layers to Dialog and mutes SFX, music, and ambience.",
             function() return ns.DB.soloMode end,
             function(value) ns:SetSoloMode(value) end)
     end
@@ -1441,8 +1457,8 @@ local function BuildGeneral(content, y)
     local library = CreateButton(section, "Open sound library", publicLayout and 160 or 206, function()
         ns:OpenSoundPicker(nil, function() end, "bronze")
     end, true)
-    AddTooltip(library, "Sound library", "Audition the curated WoW spell assets. Pickers opened from a spell moment also save your choice.")
-    AddTooltip(channel, "Sound channel", "Choose which WoW sound channel plays Resonance layers.")
+    AddTooltip(library, "Sound library", "Preview curated WoW sounds. A picker opened from a spell moment saves your choice.")
+    AddTooltip(channel, "Sound channel", "Choose the WoW sound channel for Resonance layers.")
 
     if publicLayout then
         -- A compact, named four-column grid: related settings on the left,
@@ -1503,13 +1519,13 @@ function ns:CreateSoundSetWindow()
     local close = CreateCloseButton(window)
     close:SetPoint("TOPRIGHT", -8, -8)
     local title = CreateText(window, "GameFontNormalLarge", "Sound sets"); title:SetPoint("TOPLEFT", 18, -16)
-    local subtitle = CreateText(window, "GameFontHighlightSmall", "Editing a preset switches you to your personal set. Save changes updates that set.")
+    local subtitle = CreateText(window, "GameFontHighlightSmall", "Edits to a preset continue in your Personal set. Save changes writes to that set.")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4); subtitle:SetTextColor(unpack(COLORS.muted))
     window.subtitle = subtitle
     local drag = CreateFrame("Frame", nil, window); drag:SetPoint("TOPLEFT"); drag:SetPoint("TOPRIGHT"); drag:SetHeight(50)
     drag:EnableMouse(true); drag:RegisterForDrag("LeftButton")
     drag:SetScript("OnDragStart", function() window:StartMoving() end); drag:SetScript("OnDragStop", function() window:StopMovingOrSizing() end)
-    window.empty = CreateText(window, "GameFontHighlight", "Your personal set appears here after your first edit.")
+    window.empty = CreateText(window, "GameFontHighlight", "Your Personal set appears after your first edit.")
     window.empty:SetPoint("CENTER", 0, 20); window.empty:SetTextColor(unpack(COLORS.muted))
     local setScroll=CreateFrame("ScrollFrame",nil,window)
     setScroll:SetPoint("TOPLEFT",18,-66); setScroll:SetPoint("BOTTOMRIGHT",-34,58)
@@ -1530,10 +1546,10 @@ function ns:CreateSoundSetWindow()
             return
         end
         local store = ns:GetSpecProfileStore(specID)
-        local sourceName = store and store.loadedName or ns.SUPPORTED_SPECS[specID] or "working set"
+        local sourceName = store and store.loadedName or ns.SUPPORTED_SPECS[specID] or "current sounds"
         loadConfirmPanel.specID = specID
         loadConfirmPanel.setName = setName
-        loadConfirmPanel.message:SetText("Using |cff9d7cff"..setName.."|r will replace the unsaved edits to |cffffffff"..sourceName.."|r. Save changes first if you want to keep them.")
+        loadConfirmPanel.message:SetText("Use |cff9d7cff"..setName.."|r? Unsaved changes to |cffffffff"..sourceName.."|r will be replaced. Save them first to keep them.")
         loadConfirmPanel:Show()
         loadConfirmPanel:Raise()
     end
@@ -1553,7 +1569,7 @@ function ns:CreateSoundSetWindow()
         row.export=CreateButton(row,"Export",54,function()
             local exportText, reason = ns:ExportSoundSet(window.specID, row.setName)
             if exportText then window.transfer:OpenExport(row.setName, exportText)
-            else ns:Print("Could not export this sound set (" .. tostring(reason or "unknown error") .. ").") end
+            else ns:Print("Could not export this sound set.") end
         end)
         row.export:SetPoint("RIGHT",-8,0)
         row.delete=CreateButton(row,"×",28,function() ns:DeleteSoundSet(window.specID,row.setName); window:Refresh(); ns:RefreshOptions() end)
@@ -1566,10 +1582,10 @@ function ns:CreateSoundSetWindow()
         row.name:SetPoint("RIGHT", row.load, "LEFT", -8, 0)
         row.status:SetPoint("RIGHT", row.load, "LEFT", -8, 0)
         row.name:SetJustifyH("LEFT"); row.name:SetWordWrap(false)
-        AddTooltip(row.rename, "Rename set", "Click the set name to rename this personal or saved set. Built-in presets cannot be renamed.")
-        AddTooltip(row.load, "Use this set", "Replaces the current working sounds with this saved set. Save changes first if the active set is marked Changed.")
-        AddTooltip(row.overwrite, "Save changes", "Updates the active set with the changes you have made.")
-        AddTooltip(row.delete, "Delete set", "Deletes this named set. Your first personal set and built-in presets are protected.")
+        AddTooltip(row.rename, "Rename set", "Click the name to rename a Personal or saved set. Built-in presets cannot be renamed.")
+        AddTooltip(row.load, "Use this set", "Replaces the current sounds. Save changes first if the active set has unsaved edits.")
+        AddTooltip(row.overwrite, "Save changes", "Writes the current changes to the active set.")
+        AddTooltip(row.delete, "Delete set", "Deletes this named set. Personal and built-in sets are protected.")
         self.rows[index]=row
         return row
     end
@@ -1591,9 +1607,9 @@ function ns:CreateSoundSetWindow()
     namePanel=CreateFrame("Frame",nil,window,"BackdropTemplate")
     namePanel:SetSize(360,132); namePanel:SetPoint("CENTER"); namePanel:SetFrameLevel(window:GetFrameLevel()+20)
     namePanel:EnableMouse(true); ApplyBackdrop(namePanel,COLORS.card,COLORS.accent)
-    local nameTitle=CreateText(namePanel,"GameFontNormalLarge","Name this sound set")
+    local nameTitle=CreateText(namePanel,"GameFontNormalLarge","Name your sound set")
     nameTitle:SetPoint("TOPLEFT",16,-14)
-    local nameHelp=CreateText(namePanel,"GameFontHighlightSmall","Create another named copy of your current sounds. Your first personal set stays protected.")
+    local nameHelp=CreateText(namePanel,"GameFontHighlightSmall","Save the current sounds as another set. Your Personal set stays unchanged.")
     nameHelp:SetPoint("TOPLEFT",nameTitle,"BOTTOMLEFT",0,-3); nameHelp:SetTextColor(unpack(COLORS.muted))
     nameBox=CreateFrame("EditBox",nil,namePanel,"BackdropTemplate")
     nameBox:SetSize(328,24); nameBox:SetPoint("TOPLEFT",16,-58); nameBox:SetAutoFocus(false); nameBox:SetMaxLetters(32)
@@ -1632,8 +1648,8 @@ function ns:CreateSoundSetWindow()
             nameBox:SetText(sourceName or "")
             nameBox:HighlightText()
         else
-            nameTitle:SetText("Name this sound set")
-            nameHelp:SetText("Create another named copy of your current sounds. Your first personal set stays protected.")
+            nameTitle:SetText("Name your sound set")
+            nameHelp:SetText("Save the current sounds as another set. Your Personal set stays unchanged.")
             createNamed:SetText("Create")
             nameBox:SetText("")
         end
@@ -1682,8 +1698,8 @@ function ns:CreateSoundSetWindow()
 
     function transfer:OpenExport(setName,exportText)
         self.mode="export"; self.title:SetText("Export “"..setName.."”")
-        self.help:SetText("Copy this complete Resonance code and send it to a friend. It contains this specialization’s sounds, layers, delays, and toggles.")
-        self.status:SetText("Ctrl+C copies the selected code.")
+        self.help:SetText("Copy this code to share this specialization’s sounds, layers, delays, and toggles.")
+        self.status:SetText("Ctrl+C copies the code.")
         self.status:SetTextColor(unpack(COLORS.muted))
         self.action:SetText("Select all")
         self.action:SetScript("OnClick",function() textBox:SetFocus(); textBox:HighlightText() end)
@@ -1693,7 +1709,7 @@ function ns:CreateSoundSetWindow()
 
     function transfer:OpenImport()
         self.mode="import"; self.title:SetText("Import new sound set")
-        self.help:SetText("Paste a complete Resonance export code. It must belong to the specialization currently shown in this window.")
+        self.help:SetText("Paste a Resonance code for the specialization shown here.")
         self.status:SetText("")
         self.status:SetTextColor(unpack(COLORS.muted))
         self.action:SetText("Import")
@@ -1704,13 +1720,13 @@ function ns:CreateSoundSetWindow()
                 transfer:Hide(); window:Refresh(); ns:RefreshOptions()
             elseif reason == "wrong-spec" then
                 local sourceName = ns.SUPPORTED_SPECS[sourceSpecID] or ("specialization "..tostring(sourceSpecID or "?"))
-                transfer.status:SetText("This code belongs to "..sourceName..". Select that spec first.")
+                transfer.status:SetText("Choose "..sourceName.." before importing this code.")
                 transfer.status:SetTextColor(1,0.35,0.35,1)
             elseif reason == "checksum" then
-                transfer.status:SetText("Invalid or incomplete code. Copy the entire export again.")
+                transfer.status:SetText("Code is incomplete. Copy the full export and try again.")
                 transfer.status:SetTextColor(1,0.35,0.35,1)
             else
-                transfer.status:SetText("This is not a valid Resonance sound-set code.")
+                transfer.status:SetText("Not a Resonance sound-set code.")
                 transfer.status:SetTextColor(1,0.35,0.35,1)
             end
         end)
@@ -1770,7 +1786,8 @@ function ns:CreateSoundSetWindow()
         if not ns.SUPPORTED_SPECS[specID] then return end
         local changed = self.specID ~= specID
         self.specID = specID
-        self.subtitle:SetText((ns.SUPPORTED_SPECS[specID] or "This specialization") .. " \226\128\162 presets and saved sets")
+        local scope = specID == ns.GENERIC_SPEC_ID and "shared character sounds" or "presets and saved sets"
+        self.subtitle:SetText((ns.SUPPORTED_SPECS[specID] or "This specialization") .. " \226\128\162 " .. scope)
         if changed then
             -- A pending confirmation or name/import dialog belongs to the
             -- previous specialization. Close it rather than letting it act
@@ -1797,12 +1814,17 @@ end
 
 local function BuildSpecSection(content, specID, y)
     local specRules = ns.RulesBySpec[specID] or {}
+    local isGeneric = specID == ns.GENERIC_SPEC_ID
     local groups, order = {}, {}
     for _, rule in ipairs(specRules) do
-        if not groups[rule.spell] then groups[rule.spell]={}; order[#order+1]=rule.spell end
-        groups[rule.spell][#groups[rule.spell]+1]=rule
+        -- Hearthstone cards are ownership-aware. Their stable item-ID settings
+        -- remain intact when a toy is unavailable or added later.
+        if not ns.IsRuleAvailable or ns:IsRuleAvailable(rule) then
+            if not groups[rule.spell] then groups[rule.spell]={}; order[#order+1]=rule.spell end
+            groups[rule.spell][#groups[rule.spell]+1]=rule
+        end
     end
-    local section = CreateSection(content, ns.SUPPORTED_SPECS[specID], nil, 84)
+    local section = CreateSection(content, isGeneric and "Generic sounds" or ns.SUPPORTED_SPECS[specID], nil, 84)
     section:SetPoint("TOPLEFT", 0, y)
     section:SetPoint("TOPRIGHT", 0, y)
     section.spellCards = {}
@@ -1815,7 +1837,7 @@ local function BuildSpecSection(content, specID, y)
         end
     end
 
-    local specToggle = CreateCheckRow(section, "Enable this specialization", nil,
+    local specToggle = CreateCheckRow(section, isGeneric and "Enable generic sounds" or "Enable this specialization", nil,
         function() return ns.DB.specEnabled[specID] end,
         function(value)
             ns.DB.specEnabled[specID] = value
@@ -1932,10 +1954,19 @@ local function BuildSpecTabs(content, y)
             local info = C_SpecializationInfo.GetSpecializationInfoByID(specID)
             specIcon = info and info.icon
         end
-        icon:SetTexture(specIcon or "Interface\\Icons\\INV_Misc_QuestionMark")
-        icon:SetTexCoord(0.07,0.93,0.07,0.93)
+        if specID == ns.GENERIC_SPEC_ID then
+            icon:SetTexture(ns.GENERIC_ICON_TEXTURE)
+            icon:SetTexCoord(0, 1, 0, 1)
+        else
+            icon:SetTexture(specIcon or "Interface\\Icons\\INV_Misc_QuestionMark")
+            icon:SetTexCoord(0.07,0.93,0.07,0.93)
+        end
         button:SetScript("OnClick",function() ns:ShowOptionsSpec(specID) end)
-        AddTooltip(button,ns.SUPPORTED_SPECS[specID],"Show this specialization's sound moments and saved sets.")
+        if specID == ns.GENERIC_SPEC_ID then
+            AddTooltip(button, "Generic sounds", "Shared travel, skyriding, and recovery moments for this character.")
+        else
+            AddTooltip(button,ns.SUPPORTED_SPECS[specID],"Show this specialization's moments and sound sets.")
+        end
         button.refresh=function(self)
             if ns.SelectedOptionsSpec==specID then self:SetBackdropBorderColor(unpack(COLORS.teal)); self:SetBackdropColor(0.10,0.20,0.20,1)
             else self:SetBackdropBorderColor(unpack(COLORS.border)); self:SetBackdropColor(unpack(COLORS.cardAlt)) end
@@ -1965,7 +1996,7 @@ local function BuildSpecTabs(content, y)
         local visible = {}
         for index, specID in ipairs(specs) do
             local button = buttons[index]
-            local show = self._expanded or not playerClassID or SPEC_CLASS_ID[specID] == playerClassID
+            local show = specID == ns.GENERIC_SPEC_ID or self._expanded or not playerClassID or SPEC_CLASS_ID[specID] == playerClassID
             button:SetShown(show)
             if show then visible[#visible + 1] = button end
         end
@@ -2165,13 +2196,13 @@ function ns:CreateOptions()
     local icon = header:CreateTexture(nil, "ARTWORK")
     icon:SetSize(42, 42)
     icon:SetPoint("LEFT", 14, 0)
-    icon:SetTexture("Interface\\Icons\\Spell_Mage_ArcaneOrb")
-    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    icon:SetTexture(ns.ICON_TEXTURE)
+    icon:SetTexCoord(0, 1, 0, 1)
 
     local title = CreateText(header, "GameFontNormalLarge", "Resonance")
     title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 12, -1)
     title:SetTextColor(unpack(COLORS.accent))
-    local subtitle = CreateText(header, "GameFontHighlightSmall", "Native spell layers • precise moments • character/spec sound sets")
+    local subtitle = CreateText(header, "GameFontHighlightSmall", "Spell sound layers")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 1, -4)
     subtitle:SetTextColor(unpack(COLORS.muted))
 

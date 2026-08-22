@@ -1,10 +1,16 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON_NAME = ADDON_NAME
+-- One shared texture keeps the addon's header, minimap button, compartment
+-- entry, and packaged metadata visually aligned.
+ns.ICON_TEXTURE = "Interface\\AddOns\\Resonance\\Assets\\ResonanceIcon"
+ns.GENERIC_ICON_TEXTURE = "Interface\\Icons\\INV_Misc_Rune_01"
 local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
-ns.VERSION = (type(getMetadata) == "function" and getMetadata("Resonance", "Version")) or "1.0.0"
+ns.VERSION = (type(getMetadata) == "function" and getMetadata("Resonance", "Version")) or "1.1.0"
 ns.COLOR = "|cff9d7cff"
+ns.GENERIC_SPEC_ID = 0
 ns.SPEC_ORDER = {
+    ns.GENERIC_SPEC_ID,
     71, 72, 73,       -- Warrior
     65, 66, 70,       -- Paladin
     253, 254, 255,    -- Hunter
@@ -20,6 +26,7 @@ ns.SPEC_ORDER = {
     1467, 1468, 1473, -- Evoker
 }
 ns.SUPPORTED_SPECS = {
+    [ns.GENERIC_SPEC_ID] = "Generic",
     [71] = "Arms Warrior",
     [72] = "Fury Warrior",
     [73] = "Protection Warrior",
@@ -61,9 +68,11 @@ ns.SUPPORTED_SPECS = {
     [1468] = "Preservation Evoker",
     [1473] = "Augmentation Evoker",
 }
-ns.BUILTIN_SET_VERSION = 6
+-- Increment whenever curated built-in layers change. Existing untouched
+-- built-ins then refresh on reload; personal and saved sets remain intact.
+ns.BUILTIN_SET_VERSION = 10
 ns.PROFILE_SCHEMA_VERSION = 1
-ns.RULE_CATALOG_VERSION = 2
+ns.RULE_CATALOG_VERSION = 6
 ns.SOUND_CATALOG_VERSION = 4
 ns.CURATED_PRESETS = {
     { key = "subtle", name = "Resonance Subtle" },
@@ -102,7 +111,7 @@ for specID in pairs(ns.SUPPORTED_SPECS) do
 end
 
 local CHARACTER_DEFAULTS = {
-    version = 7,
+    version = 9,
     specs = {},
 }
 
@@ -320,6 +329,7 @@ local ACCOUNT_MIGRATIONS = {
     [8] = function(database) -- Debug sorting is always opt-in after this update.
         database.soundSortDebug = false
     end,
+    [9] = function() end, -- Individual hearthstone settings migrate per sound set.
 }
 
 local function RunOrderedMigrations(database, previousVersion, currentVersion, migrations)
@@ -441,6 +451,77 @@ local function DeepCopy(source)
     return copy
 end
 
+-- Grouped hearthstone cards became one stable card per toy/item. This is a
+-- one-to-many profile migration, so it cannot use the normal ID alias map.
+local function ExpandHearthstoneGroupRules(set)
+    if type(set) ~= "table" or type(set.rules) ~= "table" then return end
+    for legacyID, targetIDs in pairs(ns.HearthstoneGroupRuleExpansions or {}) do
+        local oldCast = set.rules[legacyID]
+        local oldCasting = set.rules[legacyID .. "_casting"]
+        if type(targetIDs) == "table" then
+            for _, targetID in ipairs(targetIDs) do
+                if type(oldCast) == "table" and set.rules[targetID] == nil then
+                    set.rules[targetID] = DeepCopy(oldCast)
+                end
+                if type(oldCasting) == "table" and set.rules[targetID .. "_casting"] == nil then
+                    set.rules[targetID .. "_casting"] = DeepCopy(oldCasting)
+                end
+            end
+        end
+        set.rules[legacyID] = nil
+        set.rules[legacyID .. "_casting"] = nil
+    end
+end
+
+-- Individual Hearthstone cards use the normal two editable slots unless the
+-- player actually added another sound. Older family cards could carry an
+-- unused third placeholder into every expanded card; remove only genuinely
+-- empty optional slots, never a selected (even disabled) layer.
+local function TrimEmptyHearthstoneLayers(set)
+    if type(set) ~= "table" or type(set.rules) ~= "table" then return end
+    for ruleID, config in pairs(set.rules) do
+        local rule = ns.RuleByID and ns.RuleByID[ruleID]
+        if rule and rule.hearthstoneItemID and type(config) == "table" and type(config.layers) == "table" then
+            local layerCount = math.max(2, math.floor(tonumber(config.layerCount) or 2))
+            while layerCount > 2 do
+                local layer = config.layers[layerCount]
+                if type(layer) == "table" and tonumber(layer.soundID) and tonumber(layer.soundID) > 0 then
+                    break
+                end
+                config.layers[layerCount] = nil
+                layerCount = layerCount - 1
+            end
+            config.layerCount = layerCount
+        end
+    end
+end
+
+-- Crystal lift is a short pickup chime, not an Arcantina teleport texture.
+-- Replace the bundled Casting accent with a longer power-source resonance and
+-- its old completion accent with a compact spark impact. This preserves each
+-- layer's enabled state and timing.
+local function RefreshArcantinaCastingAccent(set)
+    local rules = type(set) == "table" and set.rules
+    if type(rules) ~= "table" then return end
+    local replacements = {
+        generic_arcantina = 2428623,
+        generic_arcantina_casting = 566646,
+    }
+    for ruleID, replacementID in pairs(replacements) do
+        local config = rules[ruleID]
+        if type(config) == "table" and type(config.layers) == "table" then
+            for _, layer in pairs(config.layers) do
+                if type(layer) == "table" and tonumber(layer.soundID) == 4580313 then
+                    layer.soundID = replacementID
+                    layer.soundKind = "file"
+                    layer.soundLabel = nil
+                    layer.missingSound = nil
+                end
+            end
+        end
+    end
+end
+
 local function RemapSetSounds(set)
     if type(set) ~= "table" or type(set.rules) ~= "table" then return end
     for _, config in pairs(set.rules) do
@@ -457,6 +538,9 @@ end
 local function NormalizeProfileSet(set, allowNewRuleDefaults)
     if type(set) ~= "table" then return end
     if type(set.rules) ~= "table" then set.rules = {} end
+    ExpandHearthstoneGroupRules(set)
+    TrimEmptyHearthstoneLayers(set)
+    RefreshArcantinaCastingAccent(set)
 
     local migratedRules = {}
     -- Keep an already-current configuration if both old and new IDs exist.
@@ -508,6 +592,7 @@ end
 local function FreezeProfileSet(set, specID, includeMissingRules)
     if type(set) ~= "table" then return end
     if type(set.rules) ~= "table" then set.rules = {} end
+    ExpandHearthstoneGroupRules(set)
     for _, rule in ipairs(ns.RulesBySpec[specID] or {}) do
         local existing = set.rules[rule.id]
         if existing ~= nil or includeMissingRules then
@@ -591,6 +676,13 @@ local CHARACTER_STORE_MIGRATIONS = {
         -- v7 replaces rolling auto-saves with one first-edit personal set.
         -- Existing automatic rows are reused and refreshed on that first edit.
         store.personalSetInitialized = false
+    end,
+    [8] = function(store, specID)
+        -- The Generic tab is a normal per-character store shared by every
+        -- specialization. Its profile is created by the standard initializer.
+        if specID == ns.GENERIC_SPEC_ID and type(store.personalSetInitialized) ~= "boolean" then
+            store.personalSetInitialized = false
+        end
     end,
 }
 
@@ -744,6 +836,7 @@ end
 
 local function PrepareSavedSnapshot(owner, source, specID, automatic)
     local snapshot = DeepCopy(source)
+    NormalizeProfileSet(snapshot, false)
     FreezeProfileSet(snapshot, specID, true)
     NormalizeProfileSet(snapshot, false)
     snapshot.builtin = nil
@@ -1212,6 +1305,7 @@ function ns:ExportSoundSet(specID, name)
     if type(source) ~= "table" then return nil, "missing-set" end
 
     local snapshot = DeepCopy(source)
+    NormalizeProfileSet(snapshot, source.builtin == true)
     FreezeProfileSet(snapshot, specID, true)
     NormalizeProfileSet(snapshot, source.builtin == true)
 
@@ -1271,6 +1365,7 @@ function ns:ExportSoundSet(specID, name)
 end
 
 local function CommitImportedSoundSet(self, targetSpecID, name, imported)
+    NormalizeProfileSet(imported, false)
     FreezeProfileSet(imported, targetSpecID, true)
     NormalizeProfileSet(imported, false)
     imported.builtin = nil

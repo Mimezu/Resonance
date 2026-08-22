@@ -60,17 +60,17 @@ end
 local STEPS = {
     {
         title = "Make every cast feel better",
-        body = "Resonance adds small layers around Blizzard's spell audio. It never replaces the original sound.\n\nA sound you choose becomes part of the current working set. Exit leaves that edit in place, but the tour never saves or overwrites a named set for you.",
+        body = "Resonance adds optional layers around Blizzard's spell audio. It never replaces the original sound.\n\nThe tour never saves or overwrites a set for you.",
     },
     {
         title = "Choose a spell moment",
-        body = "Each card is one spell moment.\n\nCast fires when a spell succeeds. Release follows a completed empower. Casting starts with a real cast, channel, or empower bar and fades when it ends.",
+        body = "Each card is one spell moment.\n\nCast follows a successful spell. Release follows a completed empower. Casting begins with a real cast, channel, or empower bar and fades when it ends.",
         target = CurrentCell,
         scroll = true,
     },
     {
         title = "Choose the first layer",
-        body = "Click a sound name to open the library. The picker starts on the sound already used here, so comparing nearby choices is easy.",
+        body = "Click a sound name to open the library. It starts on the selected sound, so nearby choices are easy to compare.",
         target = function()
             local cell = CurrentCell()
             return cell and cell.swatches and cell.swatches[1]
@@ -84,18 +84,18 @@ local STEPS = {
     },
     {
         title = "Audition before you commit",
-        body = "Click any card to hear it. Search by name or source, or browse a magic family.\n\nNothing changes until you press Okay. Cancel returns safely.",
+        body = "Click a card to preview it. Search by name or source, or browse a category.\n\nNothing changes until you choose Okay. Cancel keeps the current sound.",
         target = function() return ns.SoundPicker end,
     },
     {
         title = "Build a layered accent",
-        body = "Each row is one added sound. A 0 ms delay plays immediately; 60–180 ms creates an echo or tail.\n\nUse + layer when a spell deserves more detail. Extra rows can be removed again.",
+        body = "Each row is one layer. A 0 ms delay plays immediately; 60–180 ms creates an echo or tail.\n\nUse + layer when a spell needs more detail. Extra rows can be removed.",
         target = CurrentCell,
         scroll = true,
     },
     {
         title = "Hear only what you added",
-        body = "The play button previews this moment's enabled layers and delays. It does not imitate Blizzard's original spell sound.",
+        body = "The play button previews this moment's enabled layers and delays. Blizzard's original spell sound is not included.",
         target = function()
             local cell = CurrentCell()
             return cell and cell.preview
@@ -109,7 +109,7 @@ local STEPS = {
     },
     {
         title = "Keep your version",
-        body = "Your edits are a working set until you save them. Open Presets / saved sets to create a named version for this character and specialization.",
+        body = "Your first edit creates a Personal set for this character and specialization. Open Presets / saved sets to name another version or save changes.",
         target = function()
             local section = Tutorial.specID and ns.SpecSections and ns.SpecSections[Tutorial.specID]
             return section and section.saveSets
@@ -123,7 +123,7 @@ local STEPS = {
     },
     {
         title = "Your sound set is ready",
-        body = "Create a named set when you want to keep this mix. Later you can overwrite it, export it to a friend, or import theirs.\n\nBuilt-in presets stay protected.",
+        body = "Save a named set to keep this mix. You can later export it to a friend or import theirs.\n\nBuilt-in presets stay protected.",
         target = function()
             local window = ns.SoundSetWindow
             if not window then return nil end
@@ -310,7 +310,7 @@ function ns:SetTutorialStep(stepNumber)
     coach.title:SetText(step.title)
     local body = step.body
     if stepNumber == 1 and Tutorial.hadDirtyWork then
-        body = body .. "\n\n|cffffb84dYou already have unsaved changes. The tutorial will build on that working set and will not save or overwrite it automatically.|r"
+        body = body .. "\n\n|cffffb84dYou already have unsaved changes. The tutorial keeps them and never saves or overwrites them.|r"
     end
     coach.body:SetText(body)
     coach.back:SetEnabled(stepNumber > 1)
@@ -395,7 +395,7 @@ function ns:StopTutorial(completed)
     if completed then
         TutorialDB().completedVersion = TUTORIAL_VERSION
         TutorialDB().lastStep = 1
-        self:Print("Tutorial complete. Your working set remains yours to save or keep editing.")
+        self:Print("Tutorial complete. Save your Personal set whenever you are ready.")
     else
         TutorialDB().lastStep = Tutorial.step
     end
@@ -437,7 +437,7 @@ function ns:TutorialSignal(event, value)
     elseif event == "sound-set-saved" and Tutorial.step == 8 then
         Tutorial.savedSet = true
         Tutorial.coach.title:SetText("Sound set saved")
-        Tutorial.coach.body:SetText("Your named set now protects this mix for the current character and specialization. You can keep editing, export it, or finish the tour.")
+        Tutorial.coach.body:SetText("Your named set now keeps this mix for the current character and specialization. You can keep editing, export it, or finish the tour.")
     elseif event == "moment-previewed" and Tutorial.step == 6 then
         C_Timer.After(0.25, function() if Tutorial.active and Tutorial.step == 6 then ns:SetTutorialStep(7) end end)
     end

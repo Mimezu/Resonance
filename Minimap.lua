@@ -106,10 +106,10 @@ function ns:CreateMinimapButton()
     background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
 
     local icon = button:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(18, 18)
+    icon:SetSize(20, 20)
     icon:SetPoint("CENTER")
-    icon:SetTexture("Interface\\Icons\\Spell_Mage_ArcaneOrb")
-    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    icon:SetTexture(ns.ICON_TEXTURE)
+    icon:SetTexCoord(0, 1, 0, 1)
 
     local border = button:CreateTexture(nil, "OVERLAY")
     border:SetSize(50, 50)

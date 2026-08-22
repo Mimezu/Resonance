@@ -6,38 +6,43 @@ local COLORS = UI.COLORS
 local TOPICS = {
     {
         title = "Welcome",
-        summary = "What Resonance changes",
-        body = "Make your spells feel more alive. Resonance adds carefully chosen WoW sounds around your own spell moments. It never replaces Blizzard's original spell audio.\n\n|cff35d1bdTHE FLOW|r\nChoose a preset  →  adjust a spell moment  →  layer sounds  →  save your version.",
+        summary = "What it adds",
+        body = "Resonance adds optional layers around confirmed spell moments. Blizzard's original spell audio stays unchanged.\n\n|cff35d1bdFLOW|r\nChoose a preset  →  adjust a moment  →  layer sounds  →  save.",
     },
     {
         title = "Start with a preset",
-        summary = "Subtle, Medium, Expressive",
-        body = "|cff9d7cffSubtle|r punctuates only signature moments.\n\n|cff9d7cffMedium|r gives the rotation more character without filling every global cooldown.\n\n|cff9d7cffExpressive|r uses richer, more frequent layers.\n\nLoading another set warns you before replacing unsaved work. Every toggle stays editable.",
+        summary = "Three starting points",
+        body = "|cff9d7cffSubtle|r layers signature moments.\n\n|cff9d7cffMedium|r adds character without covering every global cooldown.\n\n|cff9d7cffExpressive|r uses richer, more frequent layers.\n\nEvery control remains editable.",
     },
     {
         title = "Spell moments",
         summary = "Cast, Release, Casting",
-        body = "|cff35d1bdCast|r plays when the spell succeeds.\n\n|cff35d1bdRelease|r follows a completed empowered spell.\n\n|cff35d1bdCasting|r begins with a real cast, channel, or empower bar. Its added sound fades when the bar ends. Instant spells do not receive Casting moments.\n\nThe play button previews Resonance's additions only.",
+        body = "|cff35d1bdCast|r follows a successful spell.\n\n|cff35d1bdRelease|r follows a completed empower.\n\n|cff35d1bdCasting|r begins with a real cast, channel, or empower bar and fades when it ends. Instant spells have no Casting moment.\n\nThe play button previews Resonance layers only.",
+    },
+    {
+        title = "Generic sounds",
+        summary = "Shared across your specs",
+        body = "The first tab covers common character actions: skyriding, travel, and Recuperate.\n\nOwned Hearthstone toys appear in themed groups. This sound set belongs to your character, so it follows every specialization.",
     },
     {
         title = "Layers & delay",
         summary = "Build a small sound phrase",
-        body = "Each enabled row adds one sound.\n\n|cff35d1bd0 ms|r plays immediately. A small delay such as |cff35d1bd60–180 ms|r creates an echo, impact, or trailing texture.\n\nUse |cff9d7cff+ layer|r for a richer moment. Starting with the third row, any extra layer can be removed again.",
+        body = "Each enabled row plays one layer.\n\n|cff35d1bd0 ms|r plays immediately. Try |cff35d1bd60–180 ms|r for an echo, impact, or tail.\n\nUse |cff9d7cff+ layer|r for more texture. Extra rows can be removed.",
     },
     {
         title = "Sound library",
         summary = "Find, hear, and favorite",
-        body = "Browse a magic family or search every label, source, and category. Click a card to hear it, then press Okay to place it.\n\nSearch supports |cff35d1bdAND|r, |cff35d1bdOR|r, the vertical bar, and quoted phrases. Favorite sounds show a star and remain easy to find. Right-clicking an existing swatch previews that layer.",
+        body = "Browse a category or search labels, sources, and categories. Click a card to preview it, then choose Okay.\n\nSearch supports |cff35d1bdAND|r, |cff35d1bdOR|r, the vertical bar, and quoted phrases. Favorites stay easy to find. Right-click a swatch to preview its layer.",
     },
     {
         title = "Save & share",
-        summary = "Sets belong to a character/spec",
-        body = "Your first edit creates and activates a |cff35d1bdPersonal set|r named for your character and realm. It starts with that first edit, but does not update itself after that.\n\nBuilt-in presets are read-only starting points: changing one immediately switches the edited copy to your Personal set. After any change, that active set is marked |cffffb84dChanged|r. Choose |cff9d7cffSave changes|r to write your current sounds into it. If you choose another set while it is Changed, Resonance warns you first so you can save or keep editing. Export creates a compact share code; import a friend's code on the matching spec. Older RES1 share codes remain supported.",
+        summary = "Sets belong to a character and tab",
+        body = "Your first edit creates a |cff35d1bdPersonal set|r named for your character and realm.\n\nBuilt-in presets are read-only. Editing one moves the change into your Personal set. Choose |cff9d7cffSave changes|r after editing. Switching sets warns before unsaved changes are lost.\n\nExport creates a share code. Import it on the same specialization or Generic tab. RES1 codes remain supported.",
     },
     {
         title = "Safety & limits",
         summary = "What the addon deliberately avoids",
-        body = "Resonance listens only to confirmed player spell events. It does not automate gameplay or track blocked combat information such as cooldown-ready, proc, or resource-gain events.\n\nIt uses sounds already installed with WoW. The Solo added sounds option is an audition tool.",
+        body = "Resonance reacts only to confirmed player spell events. It does not automate gameplay or track unavailable combat data such as cooldown-ready, proc, or resource-gain events.\n\nIt uses sounds already installed with WoW. Solo added sounds is for auditioning.",
     },
 }
 
@@ -63,10 +68,10 @@ function ns:CreateHelpWindow()
 
     local close = UI.CreateCloseButton(window)
     close:SetPoint("TOPRIGHT", -8, -8)
-    local title = UI.CreateText(window, "GameFontNormalHuge", "Help & tutorial")
+    local title = UI.CreateText(window, "GameFontNormalHuge", "Help")
     title:SetPoint("TOPLEFT", 20, -18)
     title:SetTextColor(unpack(COLORS.accent))
-    local subtitle = UI.CreateText(window, "GameFontHighlightSmall", "Learn the flow in a minute, or open any topic when you need it.")
+    local subtitle = UI.CreateText(window, "GameFontHighlightSmall", "Quick answers and a short interactive walkthrough.")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
     subtitle:SetTextColor(unpack(COLORS.muted))
 

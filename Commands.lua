@@ -11,7 +11,7 @@ function ns:PrintAudit()
     self:Print("Hero tree: " .. (specID and self:GetHeroTreeLabel(specID) or "Not detected"))
     self:Print("Apex: " .. (specID and self:GetApexLabel(specID) or "Not detected"))
     local _, soundSet = self:GetActiveProfile(specID)
-    self:Print("Active moments: " .. tostring(#(self.Runtime.activeRules or {})) .. " • Sound set: " .. (soundSet or "Unsaved working set"))
+    self:Print("Active moments: " .. tostring(#(self.Runtime.activeRules or {})) .. " • Sound set: " .. (soundSet or "Unsaved changes"))
     if specID then
         local compatibility = self:GetProfileCompatibility(specID)
         self:Print(string.format("Compatibility: %d missing sounds • %d retired rules • %d new rules disabled",
@@ -31,15 +31,15 @@ function ns:HandleCommand(message)
     elseif command == "on" then
         self.DB.enabled = true
         self:QueueRefresh("slash on")
-        self:Print("enabled.")
+        self:Print("Resonance enabled.")
     elseif command == "off" then
         self.DB.enabled = false
         self:QueueRefresh("slash off")
-        self:Print("disabled. Blizzard sounds are unchanged.")
+        self:Print("Resonance disabled. Blizzard sounds are unchanged.")
     elseif command == "toggle" then
         self.DB.enabled = not self.DB.enabled
         self:QueueRefresh("slash toggle")
-        self:Print(self.DB.enabled and "enabled." or "disabled.")
+        self:Print(self.DB.enabled and "Resonance enabled." or "Resonance disabled.")
     elseif command == "test" or command == "preview" then
         local rule = self.Runtime.activeRules and self.Runtime.activeRules[1]
         if rule then self:PlayRule(rule, true) else self:OpenSoundPicker(nil, function() end, "arcane") end
@@ -48,13 +48,13 @@ function ns:HandleCommand(message)
     elseif command == "minimap" then
         self.DB.minimap.hide = not self.DB.minimap.hide
         self:UpdateMinimapButton()
-        self:Print(self.DB.minimap.hide and "minimap button hidden." or "minimap button shown.")
+        self:Print(self.DB.minimap.hide and "Minimap button hidden." or "Minimap button shown.")
     elseif command == "solo" then
         self:SetSoloMode(not self.DB.soloMode)
         if self.RefreshOptions then self:RefreshOptions() end
     elseif command == "refresh" then
         self:QueueRefresh("slash refresh")
-        self:Print("capability audit queued.")
+        self:Print("Refresh queued.")
     elseif command == "reset" then
         StaticPopup_Show("RESONANCE_RESET_CONFIRM")
     elseif command == "help" then
@@ -62,7 +62,7 @@ function ns:HandleCommand(message)
     elseif command == "tutorial" or command == "tour" then
         self:StartTutorial()
     else
-        self:Print("/res options • help • tutorial • on • off • toggle • test • audit • solo • minimap • refresh • reset")
+        self:Print("/res options • help • tutorial • on • off • toggle • preview • status • solo • minimap • refresh • reset")
     end
 end
 

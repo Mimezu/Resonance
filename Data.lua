@@ -235,6 +235,9 @@ end
 -- hand-maintained list.  Explicit channel/empower rules are retained even when
 -- their special cast-time representation reports zero milliseconds.
 local function RuleHasCastBar(rule)
+    if rule.noGeneratedCasting then
+        return false
+    end
     -- Channels already expose an explicit Channeling moment.  Generating a
     -- second Casting row for the same UNIT_SPELLCAST_CHANNEL_START would make
     -- both layers fire together and add no useful control.

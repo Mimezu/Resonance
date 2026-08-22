@@ -1,13 +1,13 @@
 ## Interface: 120100
 ## Title: Resonance
-## Notes: Native, restrained sound accents for modern class gameplay.
+## Notes: Build your spell sound identity with layered, timed WoW sound accents.
 ## Author: Mimezu
-## Version: 1.0.0
-## X-Resonance-ReleaseBuild: 3
+## Version: 1.1.0
+## X-Resonance-ReleaseBuild: 4
 ## DefaultState: disabled
 ## SavedVariables: ResonanceDB
 ## SavedVariablesPerCharacter: ResonanceCharDB
-## IconTexture: Interface\Icons\Spell_Mage_ArcaneOrb
+## IconTexture: Interface\AddOns\Resonance\Assets\ResonanceIcon
 ## AddonCompartmentFunc: Resonance_AddonCompartmentFunction
 ## Category-enUS: Combat
 
@@ -18,9 +18,11 @@ Rules_MagePriestWarlock.lua
 Rules_HunterRogueWarrior.lua
 Rules_ArcaneFrost_12_1.lua
 Rules_EvokerDH_12_1.lua
+Rules_Generic.lua
 Data.lua
 BossVoices.lua
 Sounds.lua
+Presets_Generic.lua
 Presets_MagePriestWarlock.lua
 Presets_PaladinDKWarrior.lua
 Presets_HunterRogueDH.lua

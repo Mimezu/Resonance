@@ -1,70 +1,73 @@
 # Resonance
 
-Give your spells a richer sound identity while keeping World of Warcraft's original audio intact during normal play.
+![Resonance icon](Assets/ResonanceIcon.png)
 
-Resonance adds carefully chosen sound accents when WoW confirms a successful player spell cast, starts a watched cast or channel, or completes an empowered release. Every current Retail specialization has ready-to-use sound sets, and each editable moment can be changed, layered, delayed, previewed, or disabled.
+Layer curated World of Warcraft sounds onto confirmed spell moments.
 
 [Download the latest release](https://github.com/Mimezu/Resonance/releases/latest/download/Resonance.zip)
 
 ![The Resonance spell editor](.github/readme/resonance-editor.png)
 
-## Make every specialization sound like yours
+## Start here
 
-- Enable or disable Resonance separately for each specialization.
-- Choose which spell moments receive an added sound.
-- During normal play, keep Blizzard's spell audio and layer Resonance over it.
-- Preview individual moments while you build your sound set.
-- Use the included Subtle, Medium, and Expressive presets as a starting point.
+1. Type `/res` in game.
+2. Choose **Resonance Subtle**, **Medium**, or **Expressive**.
+3. Click a sound slot to browse and preview the library.
+4. Save a Personal set when you want to keep your changes.
 
-Personal sound sets are stored by character and specialization, so each build can have its own sound.
+Resonance adds its own layers. It does not replace WoW's original spell audio.
 
-## Browse and preview the sound library
+## Spell layers
 
-Open any sound slot to browse a curated library of World of Warcraft sounds. Search by name, spell, class, encounter, or description; browse sound families; and click any result to hear it immediately.
+Each spell can have a sound at the moment it matters:
 
-![Browse and search the sound library](.github/readme/sound-picker.png)
+- **Cast** — WoW confirms the spell succeeded.
+- **Casting** — a cast, channel, or empower bar begins.
+- **Release** — an empowered spell completes.
 
-Favorite sounds you want to find again quickly. The Favorites view keeps your personal shortlist in one place.
-
-![Favorite sounds in the picker](.github/readme/sound-favorites.png)
-
-## Build layered spell accents
-
-Each spell moment can use several sound layers. Small millisecond delays let you build an echo, a trailing texture, or a more expressive sequence from multiple sounds.
+Add layers for more detail, then use millisecond delays to space them out.
 
 ![Layer sounds and adjust their delays](.github/readme/sound-layers.png)
 
-## Save, switch, and share sound sets
+## Generic sounds
 
-Start with a built-in preset or save your own set for a character and specialization. You can switch sets at any time, export one to share with a friend playing the same specialization, or import a set someone sends you.
+The **Generic** tab follows the character across specializations. It includes:
 
-Exports use the compact, self-contained `RES3F` share format: it preserves spell-rule and sound IDs, layers, delays, and toggles without depending on a fixed catalog order. This keeps shared sets resilient when Resonance adds sounds or Blizzard changes spells. Older `RES1` share codes remain importable.
+- Skyriding: Surge Forward, Skyward Ascent, Whirling Surge, and Aerial Halt.
+- Travel: Key to the Arcantina.
+- Recovery: Recuperate.
+- Hearthstones: every supported Hearthstone toy or item available to that character gets its own Cast and Casting card.
+
+## Sound sets and sharing
+
+Sound sets are saved per character and specialization. Generic sets are saved once per character.
+
+Export a set to share one specialization or a Generic setup. Import it on a matching specialization or Generic tab. The compact `RES3F` format keeps rule and sound IDs, layers, delays, and toggles; older `RES1` codes still import.
 
 ![Built-in presets and personal sound sets](.github/readme/sound-sets.png)
 
-## Useful extras
+## Sound library
 
-- A movable, resizable editor with a guided tutorial and built-in help.
-- Optional minimap and AddOn Compartment access.
-- Solo audition mode temporarily mutes SFX, music, and ambience while routing Resonance to Dialog, then restores the previous mix when you turn it off.
-- Sound playback uses Blizzard audio already included with the game; Resonance does not bundle replacement audio files.
+Open a sound slot to search, preview, and favorite sounds. Search by sound name, class, spell, encounter, or description.
 
-## Installation
+![Browse and search the sound library](.github/readme/sound-picker.png)
 
-1. Download `Resonance.zip` from the [latest release](https://github.com/Mimezu/Resonance/releases/latest).
+## Install
+
+1. Download [Resonance.zip](https://github.com/Mimezu/Resonance/releases/latest).
 2. Extract the `Resonance` folder into `World of Warcraft/_retail_/Interface/AddOns/`.
 3. Enable Resonance on the character-selection AddOns screen.
-4. Type `/res` in game to open the editor.
+4. Type `/res`.
 
 ## Commands
 
 - `/res` — open Resonance.
 - `/res help` — open help.
-- `/res tutorial` — start the guided tutorial.
+- `/res tutorial` — start the tutorial.
 - `/res on`, `/res off`, `/res toggle` — control the addon.
-- `/res test` — preview an active sound cue, or open the library when no cue is active.
+- `/res test` — preview an active cue, or open the library when none is active.
 - `/res solo` — toggle solo audition mode.
 - `/res minimap` — show or hide the minimap button.
 - `/res reset` — reset Resonance after confirmation.
 
-Resonance is made for Retail World of Warcraft.
+Resonance is for Retail World of Warcraft.

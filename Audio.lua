@@ -8,6 +8,43 @@ local function Now()
     return 0
 end
 
+-- Rule labels are informational only, but diagnostics must never make a
+-- sound path fail. Some generated/legacy rules intentionally omit `name`.
+local function RuleLabel(rule)
+    if type(rule) ~= "table" then
+        return "Unknown rule"
+    end
+    if type(rule.name) == "string" and rule.name ~= "" then
+        return rule.name
+    end
+    if type(rule.spell) == "string" and rule.spell ~= "" then
+        if type(rule.moment) == "string" and rule.moment ~= "" then
+            return rule.spell .. " · " .. rule.moment
+        end
+        return rule.spell
+    end
+    if type(rule.id) == "string" and rule.id ~= "" then
+        return rule.id
+    end
+    return "Unknown rule"
+end
+
+local function SoundDebugLabel(sound)
+    if type(sound) ~= "table" then
+        return "unknown sound"
+    end
+    if type(sound.key) == "string" and sound.key ~= "" then
+        return sound.key
+    end
+    if type(sound.label) == "string" and sound.label ~= "" then
+        return sound.label
+    end
+    if type(sound.id) == "number" then
+        return tostring(sound.id)
+    end
+    return "unknown sound"
+end
+
 function ns:GetRuleCue(rule)
     local cue = rule.cue
     local specID = self.Runtime.specID
@@ -144,6 +181,7 @@ function ns:PlayRule(rule, preview)
         end
     end
 
+    local ruleLabel = RuleLabel(rule)
     local sounds = self:ResolveRuleSounds(rule)
     if #sounds == 0 then
         return false, "unresolved sound"
@@ -163,7 +201,7 @@ function ns:PlayRule(rule, preview)
         self:StopCastingSounds(CASTING_FADE_OUT_SECONDS)
         castingGeneration = self.Runtime.castingSoundGeneration
     end
-    local soundLabel = sounds.label or ""
+    local soundLabel = type(sounds.label) == "string" and sounds.label or ""
     local played = false
     for _, sound in ipairs(sounds) do
         local delay = math.max(0, sound.delay or 0)
@@ -176,7 +214,8 @@ function ns:PlayRule(rule, preview)
                     local accepted, handle = PlayResolvedSound(queuedSound, channel)
                     if accepted then TrackCastingHandle(handle) end
                     if ns.DB and ns.DB.debug then
-                        ns:Print((accepted and "Played " or "Skipped ") .. rule.name .. " delayed layer [" .. queuedSound.key .. "]")
+                        ns:Print((accepted and "Played " or "Skipped ") .. ruleLabel
+                            .. " delayed layer [" .. SoundDebugLabel(queuedSound) .. "]")
                     end
                 end)
                 self.Runtime.castingSoundTimers[#self.Runtime.castingSoundTimers + 1] = timer
@@ -200,7 +239,8 @@ function ns:PlayRule(rule, preview)
                     if self.Runtime.delayedSoundGeneration ~= generation then return end
                     local accepted = PlayResolvedSound(queuedSound, channel)
                     if ns.DB and ns.DB.debug then
-                        ns:Print((accepted and "Played " or "Skipped ") .. rule.name .. " delayed layer [" .. queuedSound.key .. "]")
+                        ns:Print((accepted and "Played " or "Skipped ") .. ruleLabel
+                            .. " delayed layer [" .. SoundDebugLabel(queuedSound) .. "]")
                     end
                 end)
                 TrackTimer(self.Runtime.delayedSoundTimers, timer)
@@ -220,7 +260,7 @@ function ns:PlayRule(rule, preview)
     end
 
     if self.DB.debug then
-        self:Print((played and "Played " or "Skipped ") .. rule.name .. " [" .. soundLabel .. "]")
+        self:Print((played and "Played " or "Skipped ") .. ruleLabel .. " [" .. soundLabel .. "]")
     end
     return played == true, soundLabel, trackCasting
 end

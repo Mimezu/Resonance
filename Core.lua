@@ -5,25 +5,21 @@ local playerFrame = CreateFrame("Frame")
 ns.lifecycleFrame = lifecycleFrame
 ns.playerFrame = playerFrame
 
-local EVENT_NAMES = {
-    CASTING_START = {
-        "UNIT_SPELLCAST_START",
-        "UNIT_SPELLCAST_CHANNEL_START",
-        "UNIT_SPELLCAST_EMPOWER_START",
-    },
-    SUCCEEDED = "UNIT_SPELLCAST_SUCCEEDED",
-    CHANNEL_START = "UNIT_SPELLCAST_CHANNEL_START",
-    EMPOWER_START = "UNIT_SPELLCAST_EMPOWER_START",
-    EMPOWER_STOP = "UNIT_SPELLCAST_EMPOWER_STOP",
-}
-
-local CASTING_END_EVENTS = {
+-- Routing is deliberately registered once. Rebuilding rules can occur from
+-- settings, talent, or spec refreshes, including while in combat; changing a
+-- frame's event subscriptions there risks protected-frame taint. The handler
+-- below is cheap when no active rule owns the incoming spell.
+local PLAYER_SPELLCAST_EVENTS = {
+    "UNIT_SPELLCAST_START",
+    "UNIT_SPELLCAST_SUCCEEDED",
+    "UNIT_SPELLCAST_CHANNEL_START",
+    "UNIT_SPELLCAST_EMPOWER_START",
+    "UNIT_SPELLCAST_EMPOWER_STOP",
     "UNIT_SPELLCAST_STOP",
     "UNIT_SPELLCAST_FAILED",
     "UNIT_SPELLCAST_FAILED_QUIET",
     "UNIT_SPELLCAST_INTERRUPTED",
     "UNIT_SPELLCAST_CHANNEL_STOP",
-    "UNIT_SPELLCAST_EMPOWER_STOP",
 }
 
 local function GetSpecID()
@@ -55,60 +51,69 @@ function ns:CompileRules()
     if self.StopCastingSounds then
         self:StopCastingSounds(0.08)
     end
-    playerFrame:UnregisterAllEvents()
     self.Runtime.activeRules = {}
     self.Runtime.eventRules = {}
     self.Runtime.eventSpellRules = {}
     self.Runtime.lastRulePlay = {}
     self.Runtime.empowerSpellID = nil
+    if self.RefreshHearthstoneAvailability then
+        self:RefreshHearthstoneAvailability()
+    end
     local specID = GetSpecID()
     self.Runtime.specID = specID
-    if not specID or not self.SUPPORTED_SPECS[specID] then
-        return
-    end
-    if not self.DB.enabled or not self.DB.specEnabled[specID] then
+    if not self.DB.enabled then
         return
     end
 
-    local eventsNeeded = {}
-    for _, rule in ipairs(self.RulesBySpec[specID] or {}) do
-        if self:GetRuleEnabled(rule) and (not rule.capability or self:HasCapability(rule.capability)) then
-            self.Runtime.activeRules[#self.Runtime.activeRules + 1] = rule
-            self.Runtime.eventRules[rule.event] = self.Runtime.eventRules[rule.event] or {}
-            table.insert(self.Runtime.eventRules[rule.event], rule)
-            local spellRules = self.Runtime.eventSpellRules[rule.event]
-            if not spellRules then
-                spellRules = {}
-                self.Runtime.eventSpellRules[rule.event] = spellRules
-            end
-            for spellID in pairs(rule.spellSet or {}) do
-                local matching = spellRules[spellID]
-                if not matching then
-                    matching = {}
-                    spellRules[spellID] = matching
+    local function compileSpecRules(targetSpecID)
+        if self.DB.specEnabled[targetSpecID] == false then return end
+        for _, rule in ipairs(self.RulesBySpec[targetSpecID] or {}) do
+            local available = not self.IsRuleAvailable or self:IsRuleAvailable(rule)
+            if self:GetRuleEnabled(rule)
+                and available
+                and (not rule.capability or self:HasCapability(rule.capability)) then
+                self.Runtime.activeRules[#self.Runtime.activeRules + 1] = rule
+                self.Runtime.eventRules[rule.event] = self.Runtime.eventRules[rule.event] or {}
+                table.insert(self.Runtime.eventRules[rule.event], rule)
+                local spellRules = self.Runtime.eventSpellRules[rule.event]
+                if not spellRules then
+                    spellRules = {}
+                    self.Runtime.eventSpellRules[rule.event] = spellRules
                 end
-                matching[#matching + 1] = rule
-            end
-            local eventNames = EVENT_NAMES[rule.event]
-            if type(eventNames) == "table" then
-                for _, eventName in ipairs(eventNames) do
-                    eventsNeeded[eventName] = true
-                end
-            elseif eventNames then
-                eventsNeeded[eventNames] = true
-            end
-            if rule.event == "CASTING_START" then
-                for _, eventName in ipairs(CASTING_END_EVENTS) do
-                    eventsNeeded[eventName] = true
+                local spellIDs = self.GetRuntimeSpellIDs and self:GetRuntimeSpellIDs(rule) or rule.spellIDs or {}
+                for _, spellID in ipairs(spellIDs) do
+                    local matching = spellRules[spellID]
+                    if not matching then
+                        matching = {}
+                        spellRules[spellID] = matching
+                    end
+                    matching[#matching + 1] = rule
                 end
             end
         end
     end
 
-    for event in pairs(eventsNeeded) do
-        playerFrame:RegisterUnitEvent(event, "player")
+    compileSpecRules(self.GENERIC_SPEC_ID)
+    if specID and self.SUPPORTED_SPECS[specID] and specID ~= self.GENERIC_SPEC_ID then
+        compileSpecRules(specID)
+    end
+end
+
+function ns:RegisterPlayerEventRouting()
+    if self.Runtime.playerEventRoutingRegistered then
+        return true
+    end
+    if InCombatLockdown and InCombatLockdown() then
+        self.Runtime.playerEventRoutingPending = true
+        return false
     end
 
+    for _, eventName in ipairs(PLAYER_SPELLCAST_EVENTS) do
+        playerFrame:RegisterUnitEvent(eventName, "player")
+    end
+    self.Runtime.playerEventRoutingRegistered = true
+    self.Runtime.playerEventRoutingPending = nil
+    return true
 end
 
 function ns:Refresh(reason)
@@ -312,8 +317,13 @@ lifecycleFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         lifecycleFrame:RegisterEvent("ACTIVE_COMBAT_CONFIG_CHANGED")
         lifecycleFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
         lifecycleFrame:RegisterEvent("SPELLS_CHANGED")
+        lifecycleFrame:RegisterEvent("TOYS_UPDATED")
+        lifecycleFrame:RegisterEvent("NEW_TOY_ADDED")
+        lifecycleFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+        lifecycleFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
         lifecycleFrame:RegisterEvent("PLAYER_LOGOUT")
     elseif event == "PLAYER_LOGIN" then
+        ns:RegisterPlayerEventRouting()
         if ns.RegisterCommands then ns:RegisterCommands() end
         if ns.CreateMinimapButton then ns:CreateMinimapButton() end
         if ns.RegisterSettingsLauncher then
@@ -324,6 +334,29 @@ lifecycleFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
             end
         end
         ns:QueueRefresh("login")
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        if ns.Runtime.playerEventRoutingPending then
+            ns:RegisterPlayerEventRouting()
+        end
+        if ns.Runtime.genericOptionsRebuildPending then
+            ns.Runtime.genericOptionsRebuildPending = nil
+            if ns.RebuildOptionsSpec and ns.OptionsPanel and ns.OptionsPanel:IsShown()
+                and ns.SelectedOptionsSpec == ns.GENERIC_SPEC_ID then
+                ns:RebuildOptionsSpec(ns.GENERIC_SPEC_ID)
+            end
+        end
+    elseif event == "TOYS_UPDATED" or event == "NEW_TOY_ADDED" or event == "BAG_UPDATE_DELAYED" then
+        local changed = ns.RefreshHearthstoneAvailability and ns:RefreshHearthstoneAvailability()
+        if changed then
+            ns:QueueRefresh("hearthstones")
+            local inCombat = InCombatLockdown and InCombatLockdown()
+            if not inCombat and ns.RebuildOptionsSpec and ns.OptionsPanel and ns.OptionsPanel:IsShown()
+                and ns.SelectedOptionsSpec == ns.GENERIC_SPEC_ID then
+                ns:RebuildOptionsSpec(ns.GENERIC_SPEC_ID)
+            elseif inCombat then
+                ns.Runtime.genericOptionsRebuildPending = true
+            end
+        end
     elseif event == "PLAYER_LOGOUT" then
         if ns.DB and ns.DB.soloMode then ns:DisableSoloMode(true) end
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
