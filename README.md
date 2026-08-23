@@ -17,13 +17,17 @@ Resonance adds its own layers. It does not replace WoW's original spell audio.
 
 ## Spell layers
 
-Each spell can have a sound at the moment it matters:
+Each spell can have as many added sounds at those different moments:
 
-- **Cast** — WoW confirms the spell succeeded.
-- **Casting** — a cast, channel, or empower bar begins.
-- **Release** — an empowered spell completes.
+- **Cast** — When the spell succeeds.
+- **Casting** — During a cast, channel, or empower bar.
+- **Release** — When an empowered spell is released.
 
-Add layers for more detail, then use millisecond delays to space them out.
+You can add more layers, then use millisecond delays to space them out for intricate sounds.
+
+Toggle solo mode to hear exactly what you are adding to any spell moment. Press play to preview.
+
+Choose from hundreds of existing spell or boss effects to add to your own spells.
 
 ![Layer sounds and adjust their delays](.github/readme/sound-layers.png)
 
@@ -32,15 +36,15 @@ Add layers for more detail, then use millisecond delays to space them out.
 The **Generic** tab follows the character across specializations. It includes:
 
 - Skyriding: Surge Forward, Skyward Ascent, Whirling Surge, and Aerial Halt.
-- Travel: Key to the Arcantina.
+- Travel: Arcantina and most hearthstones your character unlocked.
 - Recovery: Recuperate.
-- Hearthstones: every supported Hearthstone toy or item available to that character gets its own Cast and Casting card.
+- I will certainly add more in the future.
 
 ## Sound sets and sharing
 
 Sound sets are saved per character and specialization. Generic sets are saved once per character.
 
-Export a set to share one specialization or a Generic setup. Import it on a matching specialization or Generic tab. The compact `RES3F` format keeps rule and sound IDs, layers, delays, and toggles; older `RES1` codes still import.
+Export a set to share one specialization or a Generic setup. Import it on a matching specialization or Generic tab.
 
 ![Built-in presets and personal sound sets](.github/readme/sound-sets.png)
 
