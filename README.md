@@ -1,8 +1,6 @@
 # Resonance
 
-![Resonance icon](Assets/ResonanceIcon.png)
-
-Layer curated World of Warcraft sounds onto confirmed spell moments.
+Add custom sounds on each spell you cast to increase your immersion and gamefeel.
 
 [Download the latest release](https://github.com/Mimezu/Resonance/releases/latest/download/Resonance.zip)
 
