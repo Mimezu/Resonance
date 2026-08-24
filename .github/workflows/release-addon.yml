@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "Resonance.toc"
+      - ".github/workflows/release-addon.yml"
 
 permissions:
   contents: write
@@ -41,12 +42,37 @@ jobs:
         run: |
           STAGE="$(mktemp -d)"
           mkdir -p "$STAGE/Resonance"
-          rsync -a \
-            --exclude=".git" \
-            --exclude=".github" \
-            --exclude="*.zip" \
-            --exclude=".DS_Store" \
-            ./ "$STAGE/Resonance/"
+          cp \
+            "Resonance.toc" \
+            "Bootstrap.lua" \
+            "Rules_EvokerDruidShamanMonk.lua" \
+            "Rules_PaladinDKDH.lua" \
+            "Rules_MagePriestWarlock.lua" \
+            "Rules_HunterRogueWarrior.lua" \
+            "Rules_ArcaneFrost_12_1.lua" \
+            "Rules_EvokerDH_12_1.lua" \
+            "Rules_Generic.lua" \
+            "Data.lua" \
+            "BossVoices.lua" \
+            "Sounds.lua" \
+            "Presets_Generic.lua" \
+            "Presets_MagePriestWarlock.lua" \
+            "Presets_PaladinDKWarrior.lua" \
+            "Presets_HunterRogueDH.lua" \
+            "Presets_DruidShamanMonk.lua" \
+            "Presets_Evoker.lua" \
+            "Traits.lua" \
+            "Audition.lua" \
+            "Audio.lua" \
+            "Core.lua" \
+            "Options.lua" \
+            "Tutorial.lua" \
+            "Help.lua" \
+            "Minimap.lua" \
+            "Commands.lua" \
+            "$STAGE/Resonance/"
+          mkdir -p "$STAGE/Resonance/Assets"
+          cp "Assets/ResonanceIcon.tga" "$STAGE/Resonance/Assets/"
           (
             cd "$STAGE"
             zip -qr "$GITHUB_WORKSPACE/Resonance.zip" "Resonance"
