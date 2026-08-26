@@ -2,8 +2,9 @@
 ## Title: Resonance
 ## Notes: Build your spell sound identity with layered, timed WoW sound accents.
 ## Author: Mimezu
-## Version: 1.1.0
-## X-Resonance-ReleaseBuild: 4
+## Version: 1.2.0
+## X-Resonance-ReleaseBuild: 5
+## OptionalDeps: EllesmereUI
 ## DefaultState: disabled
 ## SavedVariables: ResonanceDB
 ## SavedVariablesPerCharacter: ResonanceCharDB

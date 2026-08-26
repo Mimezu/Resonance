@@ -7,17 +7,17 @@ local TOPICS = {
     {
         title = "Welcome",
         summary = "What it adds",
-        body = "Resonance adds optional layers around confirmed spell moments. Blizzard's original spell audio stays unchanged.\n\n|cff35d1bdFLOW|r\nChoose a preset  →  adjust a moment  →  layer sounds  →  save.",
+        body = "Resonance adds optional layers around confirmed spell moments. Blizzard's original spell audio stays unchanged.\n\n|cff2ec2b3FLOW|r\nChoose a preset  →  adjust a moment  →  layer sounds  →  save.",
     },
     {
         title = "Start with a preset",
         summary = "Three starting points",
-        body = "|cff9d7cffSubtle|r layers signature moments.\n\n|cff9d7cffMedium|r adds character without covering every global cooldown.\n\n|cff9d7cffExpressive|r uses richer, more frequent layers.\n\nEvery control remains editable.",
+        body = "|cff4594d1Subtle|r layers signature moments.\n\n|cff4594d1Medium|r adds character without covering every global cooldown.\n\n|cff4594d1Expressive|r uses richer, more frequent layers.\n\nEvery control remains editable.",
     },
     {
         title = "Spell moments",
         summary = "Cast, Release, Casting",
-        body = "|cff35d1bdCast|r follows a successful spell.\n\n|cff35d1bdRelease|r follows a completed empower.\n\n|cff35d1bdCasting|r begins with a real cast, channel, or empower bar and fades when it ends. Instant spells have no Casting moment.\n\nThe play button previews Resonance layers only.",
+        body = "|cff2ec2b3Cast|r follows a successful spell.\n\n|cff2ec2b3Release|r follows a completed empower.\n\n|cff2ec2b3Casting|r begins with a real cast, channel, or empower bar and fades when it ends. Instant spells have no Casting moment.\n\nThe play button previews Resonance layers only.",
     },
     {
         title = "Generic sounds",
@@ -27,17 +27,17 @@ local TOPICS = {
     {
         title = "Layers & delay",
         summary = "Build a small sound phrase",
-        body = "Each enabled row plays one layer.\n\n|cff35d1bd0 ms|r plays immediately. Try |cff35d1bd60–180 ms|r for an echo, impact, or tail.\n\nUse |cff9d7cff+ layer|r for more texture. Extra rows can be removed.",
+        body = "Each enabled row plays one layer.\n\n|cff2ec2b30 ms|r plays immediately. Try |cff2ec2b360–180 ms|r for an echo, impact, or tail.\n\nUse |cff4594d1+ layer|r for more texture. Extra rows can be removed.",
     },
     {
         title = "Sound library",
         summary = "Find, hear, and favorite",
-        body = "Browse a category or search labels, sources, and categories. Click a card to preview it, then choose Okay.\n\nSearch supports |cff35d1bdAND|r, |cff35d1bdOR|r, the vertical bar, and quoted phrases. Favorites stay easy to find. Right-click a swatch to preview its layer.",
+        body = "Browse a category or search labels, sources, and categories. Click a card to preview it, then choose Okay.\n\nSearch supports |cff2ec2b3AND|r, |cff2ec2b3OR|r, the vertical bar, and quoted phrases. Favorites stay easy to find. Right-click a swatch to preview its layer.",
     },
     {
         title = "Save & share",
         summary = "Sets belong to a character and tab",
-        body = "Your first edit creates a |cff35d1bdPersonal set|r named for your character and realm.\n\nBuilt-in presets are read-only. Editing one moves the change into your Personal set. Choose |cff9d7cffSave changes|r after editing. Switching sets warns before unsaved changes are lost.\n\nExport creates a share code. Import it on the same specialization or Generic tab. RES1 codes remain supported.",
+        body = "Your first edit creates a |cff2ec2b3Personal set|r named for your character and realm.\n\nBuilt-in presets are read-only. Editing one moves the change into your Personal set. Choose |cff4594d1Save changes|r after editing. Switching sets warns before unsaved changes are lost.\n\nExport creates a share code. Import it on the same specialization or Generic tab. RES1 codes remain supported.",
     },
     {
         title = "Safety & limits",
@@ -62,15 +62,16 @@ function ns:CreateHelpWindow()
     window:SetMovable(true)
     window:SetClampedToScreen(true)
     window:EnableMouse(true)
-    UI.ApplyBackdrop(window, { 0.035, 0.04, 0.065, 0.99 }, COLORS.accent)
+    UI.ApplyBackdrop(window, COLORS.window, COLORS.border)
     UI.AddArcaneTrim(window, "window")
+    UI.SkinShell(window, { bottomBar = 52 })
     self.HelpWindow = window
 
     local close = UI.CreateCloseButton(window)
     close:SetPoint("TOPRIGHT", -8, -8)
     local title = UI.CreateText(window, "GameFontNormalHuge", "Help")
     title:SetPoint("TOPLEFT", 20, -18)
-    title:SetTextColor(unpack(COLORS.accent))
+    title:SetTextColor(unpack(COLORS.text))
     local subtitle = UI.CreateText(window, "GameFontHighlightSmall", "Quick answers and a short interactive walkthrough.")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
     subtitle:SetTextColor(unpack(COLORS.muted))
@@ -85,8 +86,9 @@ function ns:CreateHelpWindow()
     rail:SetPoint("TOPLEFT", 18, -76)
     rail:SetPoint("BOTTOMLEFT", 18, 62)
     rail:SetWidth(190)
-    UI.ApplyBackdrop(rail, { 0.055, 0.06, 0.09, 0.96 }, COLORS.border)
+    UI.ApplyBackdrop(rail, COLORS.panel, COLORS.border)
     UI.AddArcaneTrim(rail, "panel")
+    UI.SkinPanel(rail, { inset = true })
     window.topicButtons = {}
     for index, topic in ipairs(TOPICS) do
         local button = UI.CreateButton(rail, topic.title, 174, function() window:ShowTopic(index) end)
@@ -95,9 +97,18 @@ function ns:CreateHelpWindow()
         button:GetFontString():ClearAllPoints()
         button:GetFontString():SetPoint("LEFT", 10, 0)
         button:GetFontString():SetJustifyH("LEFT")
+        button.activeMark = CreateFrame("Frame", nil, button)
+        button.activeMark:SetPoint("TOPLEFT", 2, -4)
+        button.activeMark:SetPoint("BOTTOMLEFT", 2, 4)
+        button.activeMark:SetWidth(2)
+        local activeTexture = button.activeMark:CreateTexture(nil, "ARTWORK")
+        activeTexture:SetAllPoints()
+        activeTexture:SetColorTexture(unpack(COLORS.teal))
+        UI.TrackAccentTexture(activeTexture)
+        button.activeMark:Hide()
         button:HookScript("OnLeave", function(self)
-            if window.topic == index then
-                self:SetBackdropColor(0.08, 0.22, 0.20, 1)
+            if window.topic == index and not self._resonanceEUI then
+                self:SetBackdropColor(unpack(COLORS.tealDim))
                 self:SetBackdropBorderColor(unpack(COLORS.teal))
             end
         end)
@@ -107,11 +118,13 @@ function ns:CreateHelpWindow()
     local content = CreateFrame("Frame", nil, window, "BackdropTemplate")
     content:SetPoint("TOPLEFT", rail, "TOPRIGHT", 12, 0)
     content:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -18, 62)
-    UI.ApplyBackdrop(content, { 0.075, 0.075, 0.115, 0.96 }, COLORS.border)
+    UI.ApplyBackdrop(content, COLORS.paper, COLORS.border)
     UI.AddArcaneTrim(content, "section")
+    UI.SkinPanel(content, { inset = true })
     content.title = UI.CreateText(content, "GameFontNormalHuge", "")
     content.title:SetPoint("TOPLEFT", 22, -22)
     content.title:SetTextColor(unpack(COLORS.teal))
+    UI.TrackAccentText(content.title)
     content.summary = UI.CreateText(content, "GameFontHighlight", "")
     content.summary:SetPoint("TOPLEFT", content.title, "BOTTOMLEFT", 0, -6)
     content.summary:SetTextColor(unpack(COLORS.muted))
@@ -136,13 +149,19 @@ function ns:CreateHelpWindow()
         local topic = TOPICS[index]
         content.title:SetText(topic.title)
         content.summary:SetText(topic.summary)
-        content.body:SetText(topic.body)
+        local body = topic.body:gsub("|cff4594d1", UI.AccentTag())
+        body = body:gsub("|cff2ec2b3", UI.AccentTag())
+        content.body:SetText(body)
         for buttonIndex, button in ipairs(self.topicButtons) do
-            if buttonIndex == index then
-                button:SetBackdropColor(0.08, 0.22, 0.20, 1)
+            local selected = buttonIndex == index
+            button.activeMark:SetShown(selected)
+            if button._resonanceEUI then
+                button:GetFontString():SetTextColor(unpack(selected and COLORS.teal or COLORS.text))
+            elseif selected then
+                button:SetBackdropColor(unpack(COLORS.tealDim))
                 button:SetBackdropBorderColor(unpack(COLORS.teal))
             else
-                button:SetBackdropColor(0.055, 0.06, 0.09, 0.96)
+                button:SetBackdropColor(unpack(COLORS.raised))
                 button:SetBackdropBorderColor(unpack(COLORS.border))
             end
         end

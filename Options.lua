@@ -1,18 +1,217 @@
 local _, ns = ...
 
 local COLORS = {
-    panel = { 0.035, 0.04, 0.065, 0.98 },
-    card = { 0.075, 0.075, 0.115, 0.96 },
-    cardAlt = { 0.055, 0.06, 0.09, 0.96 },
-    border = { 0.30, 0.22, 0.48, 0.85 },
-    accent = { 0.61, 0.46, 1.0, 1 },
-    teal = { 0.15, 0.82, 0.74, 1 },
-    muted = { 0.62, 0.64, 0.72, 1 },
+    -- Resonance follows the suite's BindCards surface stack: near-black
+    -- window chrome, blue-charcoal papers, one-pixel quiet borders, then
+    -- teal only for a chosen or successful state. This is the same compact
+    -- surface vocabulary used by BindCards.
+    window = { 0.035, 0.041, 0.052, 0.985 },
+    panel = { 0.055, 0.063, 0.078, 1 },
+    paper = { 0.073, 0.082, 0.098, 1 },
+    paperAlt = { 0.060, 0.069, 0.084, 1 },
+    card = { 0.073, 0.082, 0.098, 1 },
+    cardAlt = { 0.060, 0.069, 0.084, 1 },
+    raised = { 0.095, 0.108, 0.129, 1 },
+    border = { 0.20, 0.235, 0.28, 0.72 },
+    faint = { 0.18, 0.21, 0.25, 0.25 },
+    blue = { 0.27, 0.58, 0.82, 1 },
+    blueSoft = { 0.18, 0.36, 0.52, 1 },
+    accent = { 0.27, 0.58, 0.82, 1 },
+    teal = { 0.18, 0.76, 0.70, 1 },
+    tealDim = { 0.06, 0.20, 0.19, 1 },
+    text = { 0.91, 0.93, 0.96, 1 },
+    muted = { 0.59, 0.64, 0.71, 1 },
+    warning = { 0.93, 0.66, 0.25, 1 },
+    danger = { 0.88, 0.31, 0.34, 1 },
 }
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
--- Sampled from the top petal of Resonance's supplied flower mark.
+-- Preview controls are actions, not a competing colour system. Keep the
+-- flower mark as Resonance's identity while its surrounding UI stays shared.
 local PLAY_PINK = { 0.94, 0.50, 0.74, 1 }
+
+-- EllesmereUI is optional.  The fallback below keeps Resonance readable on
+-- its own, while this registry lets a late-loading facade skin every object
+-- already built and every object created lazily afterwards.
+local EUI = {
+    fonts = {}, buttons = {}, closeButtons = {}, editBoxes = {}, checkboxes = {},
+    panels = {}, shells = {}, scrolls = {}, accentTexts = {}, accentTextures = {},
+}
+
+local function EUIInvoke(method, frame, option)
+    local skin = EUI.skin
+    local fn = skin and skin[method]
+    if not fn or not frame then return false end
+    if option ~= nil then return pcall(fn, frame, option) end
+    return pcall(fn, frame)
+end
+
+local function ClearFallbackShell(frame)
+    if not frame or not frame.SetBackdropColor then return end
+    frame:SetBackdropColor(0, 0, 0, 0)
+    frame:SetBackdropBorderColor(0, 0, 0, 0)
+end
+
+local function EUITrack(bucket, frame, option)
+    if not frame then return frame end
+    EUI[bucket][#EUI[bucket] + 1] = { frame = frame, option = option }
+    local method = ({
+        fonts = "Font", buttons = "Button", closeButtons = "CloseButton",
+        editBoxes = "EditBox", checkboxes = "Checkbox", panels = "Panel",
+        shells = "Shell",
+    })[bucket]
+    if EUI.skin then frame._resonanceEUI = true end
+    if bucket == "closeButtons" and EUI.skin and frame._resonanceCloseStrokes then
+        for _, stroke in ipairs(frame._resonanceCloseStrokes) do stroke:SetAlpha(0) end
+    end
+    local applied = method and EUIInvoke(method, frame, option)
+    if bucket == "shells" and applied then ClearFallbackShell(frame) end
+    if bucket == "checkboxes" and EUI.skin and frame.SetChecked then
+        frame:SetChecked(frame.checked)
+    end
+    return frame
+end
+
+local function EUIStateButtonLabel(button)
+    if not EUI.skin then return end
+    if EUI.skin.StateButtonLabel then
+        pcall(EUI.skin.StateButtonLabel, button)
+    elseif EUI.skin.WhiteButtonLabel then
+        pcall(EUI.skin.WhiteButtonLabel, button)
+    end
+end
+
+local function EUITrackAccentText(text)
+    if text then EUI.accentTexts[#EUI.accentTexts + 1] = text end
+    return text
+end
+
+local function EUITrackAccentTexture(texture)
+    if texture then EUI.accentTextures[#EUI.accentTextures + 1] = texture end
+    return texture
+end
+
+local function AddAccentBorder(frame)
+    local border = CreateFrame("Frame", nil, frame)
+    border:SetAllPoints(frame)
+    border:SetFrameLevel(frame:GetFrameLevel() + 4)
+    border:EnableMouse(false)
+
+    local top = border:CreateTexture(nil, "OVERLAY")
+    top:SetPoint("TOPLEFT")
+    top:SetPoint("TOPRIGHT")
+    top:SetHeight(1)
+    local bottom = border:CreateTexture(nil, "OVERLAY")
+    bottom:SetPoint("BOTTOMLEFT")
+    bottom:SetPoint("BOTTOMRIGHT")
+    bottom:SetHeight(1)
+    local left = border:CreateTexture(nil, "OVERLAY")
+    left:SetPoint("TOPLEFT", 0, -1)
+    left:SetPoint("BOTTOMLEFT", 0, 1)
+    left:SetWidth(1)
+    local right = border:CreateTexture(nil, "OVERLAY")
+    right:SetPoint("TOPRIGHT", 0, -1)
+    right:SetPoint("BOTTOMRIGHT", 0, 1)
+    right:SetWidth(1)
+
+    for _, edge in ipairs({ top, bottom, left, right }) do
+        edge:SetColorTexture(unpack(COLORS.accent))
+        EUITrackAccentTexture(edge)
+    end
+    return border
+end
+
+local function ColorTag(color)
+    return string.format("|cff%02x%02x%02x", math.floor(color[1] * 255 + 0.5),
+        math.floor(color[2] * 255 + 0.5), math.floor(color[3] * 255 + 0.5))
+end
+
+local function EUIAccentTag()
+    return ColorTag(COLORS.accent)
+end
+
+local function UpdateEUIAccent()
+    local skin = EUI.skin
+    if not skin or not skin.GetAccentColor then return end
+    local ok, r, g, b = pcall(skin.GetAccentColor)
+    if not ok or type(r) ~= "number" or type(g) ~= "number" or type(b) ~= "number" then return end
+    for _, color in ipairs({ COLORS.accent, COLORS.blue, COLORS.teal }) do
+        color[1], color[2], color[3] = r, g, b
+    end
+    for _, text in ipairs(EUI.accentTexts) do
+        if text and text.SetTextColor then text:SetTextColor(r, g, b, 1) end
+    end
+    for _, texture in ipairs(EUI.accentTextures) do
+        if texture and texture.SetColorTexture then texture:SetColorTexture(r, g, b, 1) end
+    end
+    for _, scroll in ipairs(EUI.scrolls) do
+        local thumb = scroll and scroll._resonanceScrollBar and scroll._resonanceScrollBar._resonanceThumb
+        if thumb then
+            thumb:SetBackdropColor(r, g, b, 1)
+            thumb:SetBackdropBorderColor(r, g, b, 1)
+        end
+    end
+    for _, entry in ipairs(EUI.checkboxes) do
+        local check = entry.frame
+        if check and check.markA and check.markB then
+            check.markA:SetVertexColor(r, g, b, 1)
+            check.markB:SetVertexColor(r, g, b, 1)
+            check:SetChecked(check.checked)
+        end
+    end
+    if ns.RefreshOptions then ns:RefreshOptions() end
+    if ns.SoundPicker and ns.SoundPicker:IsShown() and ns.SoundPicker.RefreshSounds then ns.SoundPicker:RefreshSounds() end
+    if ns.SoundSetWindow and ns.SoundSetWindow:IsShown() and ns.SoundSetWindow.Refresh then ns.SoundSetWindow:Refresh() end
+    if ns.HelpWindow and ns.HelpWindow:IsShown() and ns.HelpWindow.ShowTopic then
+        ns.HelpWindow:ShowTopic(ns.HelpWindow.topic or 1)
+    end
+end
+
+local function EUITrackScroll(scroll)
+    if scroll then EUI.scrolls[#EUI.scrolls + 1] = scroll end
+    return false
+end
+
+local function ApplyEUITheme(skin)
+    EUI.skin = skin or EUI.skin
+    skin = EUI.skin
+    if not skin then return end
+    for _, entry in ipairs(EUI.shells) do
+        entry.frame._resonanceEUI = true
+        if EUIInvoke("Shell", entry.frame, entry.option) then ClearFallbackShell(entry.frame) end
+    end
+    for _, entry in ipairs(EUI.panels) do
+        entry.frame._resonanceEUI = true
+        EUIInvoke("Panel", entry.frame, entry.option)
+    end
+    for _, entry in ipairs(EUI.fonts) do EUIInvoke("Font", entry.frame, entry.option) end
+    for _, entry in ipairs(EUI.buttons) do
+        entry.frame._resonanceEUI = true
+        EUIInvoke("Button", entry.frame, entry.option)
+        EUIStateButtonLabel(entry.frame)
+    end
+    for _, entry in ipairs(EUI.closeButtons) do
+        entry.frame._resonanceEUI = true
+        if entry.frame._resonanceCloseStrokes then
+            for _, stroke in ipairs(entry.frame._resonanceCloseStrokes) do stroke:SetAlpha(0) end
+        end
+        EUIInvoke("CloseButton", entry.frame, entry.option)
+    end
+    for _, entry in ipairs(EUI.editBoxes) do
+        entry.frame._resonanceEUI = true
+        EUIInvoke("EditBox", entry.frame, entry.option)
+    end
+    for _, entry in ipairs(EUI.checkboxes) do
+        entry.frame._resonanceEUI = true
+        EUIInvoke("Checkbox", entry.frame, entry.option)
+        if entry.frame.SetChecked then entry.frame:SetChecked(entry.frame.checked) end
+    end
+    UpdateEUIAccent()
+    if skin.OnLooksChanged and not EUI.looksHooked then
+        EUI.looksHooked = true
+        pcall(skin.OnLooksChanged, UpdateEUIAccent)
+    end
+end
 
 -- The catalog editor is deliberately tucked away for the 1.14 release.
 -- Keep both the SavedVariables and implementation intact: switching this
@@ -23,17 +222,17 @@ local function IsSoundSortingDebugActive()
     return DEBUG_SOUND_TOOLS_VISIBLE and ns.DB and ns.DB.soundSortDebug == true
 end
 
-local PurpleButtonFont = CreateFont("ResonancePurpleButtonFont")
-PurpleButtonFont:CopyFontObject(GameFontNormal)
-PurpleButtonFont:SetTextColor(0.61, 0.46, 1.0, 1)
 local WhiteButtonFont = CreateFont("ResonanceWhiteButtonFont")
 WhiteButtonFont:CopyFontObject(GameFontNormal)
 WhiteButtonFont:SetTextColor(1, 1, 1, 1)
 local MutedButtonFont = CreateFont("ResonanceMutedButtonFont")
 MutedButtonFont:CopyFontObject(GameFontNormal)
-MutedButtonFont:SetTextColor(0.62, 0.64, 0.72, 1)
+MutedButtonFont:SetTextColor(0.59, 0.64, 0.71, 1)
 
 local function ApplyBackdrop(frame, color, border)
+    -- A live EUI facade owns the visual surface after it has run. Refreshing
+    -- a selected row must not paint the fallback colour system back over it.
+    if EUI.skin and frame and frame._resonanceEUI then return end
     frame:SetBackdrop({
         bgFile = WHITE,
         edgeFile = WHITE,
@@ -59,11 +258,17 @@ end
 local function SkinScrollFrame(scroll)
     if not scroll or scroll._resonanceScrollBar then return end
 
+    if not scroll._resonanceEUITracked then
+        scroll._resonanceEUITracked = true
+        EUITrackScroll(scroll)
+    end
+
     local blizzardBar = scroll.ScrollBar or scroll.scrollBar
     if not blizzardBar and scroll.GetName and scroll:GetName() then
         blizzardBar = _G[scroll:GetName() .. "ScrollBar"]
     end
     if blizzardBar then
+        scroll._resonanceBlizzardBar = blizzardBar
         blizzardBar:SetAlpha(0)
         blizzardBar:EnableMouse(false)
         blizzardBar:Hide()
@@ -73,28 +278,28 @@ local function SkinScrollFrame(scroll)
     if scroll.SetClipsChildren then scroll:SetClipsChildren(true) end
 
     local track = CreateFrame("Button", nil, scroll:GetParent(), "BackdropTemplate")
-    track:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 5, 0)
-    track:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 5, 0)
-    track:SetWidth(10)
+    track:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 4, 0)
+    track:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 4, 0)
+    track:SetWidth(8)
     track:SetFrameLevel(scroll:GetFrameLevel() + 8)
     track:EnableMouse(true)
-    ApplyBackdrop(track, { 0.025, 0.03, 0.05, 0.28 }, { 0, 0, 0, 0 })
+    ApplyBackdrop(track, COLORS.window, { 0, 0, 0, 0 })
 
     local rail = track:CreateTexture(nil, "BACKGROUND")
     rail:SetTexture("Interface\\Buttons\\WHITE8X8")
-    rail:SetVertexColor(0.30, 0.22, 0.48, 0.42)
+    rail:SetVertexColor(unpack(COLORS.faint))
     rail:SetPoint("TOP", 0, -3)
     rail:SetPoint("BOTTOM", 0, 3)
     rail:SetWidth(2)
 
     local thumb = CreateFrame("Button", nil, track, "BackdropTemplate")
     thumb:SetWidth(6)
-    thumb:SetHeight(34)
+    thumb:SetHeight(28)
     thumb:SetPoint("TOP", track, "TOP", 0, -2)
     thumb:SetFrameLevel(track:GetFrameLevel() + 1)
     thumb:EnableMouse(true)
     thumb:RegisterForDrag("LeftButton")
-    ApplyBackdrop(thumb, { 0.61, 0.46, 1.0, 0.88 }, { 0.72, 0.60, 1.0, 1 })
+    ApplyBackdrop(thumb, COLORS.teal, COLORS.teal)
 
     local dragging = false
     local dragStartY, dragStartScroll
@@ -126,8 +331,8 @@ local function SkinScrollFrame(scroll)
         if not dragging then return end
         dragging = false
         thumb:SetScript("OnUpdate", nil)
-        thumb:SetBackdropColor(0.61, 0.46, 1.0, 0.88)
-        thumb:SetBackdropBorderColor(0.72, 0.60, 1.0, 1)
+        thumb:SetBackdropColor(unpack(COLORS.teal))
+        thumb:SetBackdropBorderColor(unpack(COLORS.teal))
     end
 
     local function BeginDrag()
@@ -154,14 +359,14 @@ local function SkinScrollFrame(scroll)
 
     thumb:SetScript("OnEnter", function(self)
         if not dragging then
-            self:SetBackdropColor(0.15, 0.82, 0.74, 0.88)
+            self:SetBackdropColor(unpack(COLORS.tealDim))
             self:SetBackdropBorderColor(unpack(COLORS.teal))
         end
     end)
     thumb:SetScript("OnLeave", function(self)
         if not dragging then
-            self:SetBackdropColor(0.61, 0.46, 1.0, 0.88)
-            self:SetBackdropBorderColor(0.72, 0.60, 1.0, 1)
+            self:SetBackdropColor(unpack(COLORS.teal))
+            self:SetBackdropBorderColor(unpack(COLORS.teal))
         end
     end)
     thumb:SetScript("OnDragStart", BeginDrag)
@@ -194,6 +399,7 @@ local function SkinScrollFrame(scroll)
     scroll:HookScript("OnShow", function() C_Timer.After(0, UpdateThumb) end)
 
     scroll._resonanceScrollBar = track
+    track._resonanceThumb = thumb
     scroll._resonanceUpdateScrollBar = UpdateThumb
     C_Timer.After(0, UpdateThumb)
 end
@@ -201,9 +407,10 @@ end
 local function CreateText(parent, template, text)
     local label = parent:CreateFontString(nil, "ARTWORK", template)
     label:SetText(text)
-    if template and template:find("GameFontNormal", 1, true) then
-        label:SetTextColor(unpack(COLORS.accent))
-    end
+    -- BindCards uses bright text for ordinary labels. Individual semantic
+    -- headings set their teal or lavender colour explicitly at the callsite.
+    label:SetTextColor(unpack(COLORS.text))
+    EUITrack("fonts", label)
     return label
 end
 
@@ -221,6 +428,7 @@ local function CreateDrawnStar(parent)
         local line = star:CreateLine(nil, "ARTWORK")
         line:SetThickness(1.25)
         line:SetColorTexture(unpack(COLORS.accent))
+        EUITrackAccentTexture(line)
         line:SetStartPoint("CENTER", star, points[index][1], points[index][2])
         line:SetEndPoint("CENTER", star, points[nextIndex][1], points[nextIndex][2])
     end
@@ -309,7 +517,7 @@ local function CreateCloseButton(parent, callback)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
     button:SetSize(24, 24)
     button:SetFrameLevel(parent:GetFrameLevel() + 20)
-    ApplyBackdrop(button, COLORS.cardAlt, COLORS.border)
+    ApplyBackdrop(button, COLORS.raised, COLORS.border)
 
     local strokes = {}
     for index, angle in ipairs({ math.pi / 4, -math.pi / 4 }) do
@@ -318,9 +526,11 @@ local function CreateCloseButton(parent, callback)
         stroke:SetSize(2, 13)
         stroke:SetPoint("CENTER")
         stroke:SetRotation(angle)
-        stroke:SetVertexColor(unpack(COLORS.accent))
+        stroke:SetVertexColor(unpack(COLORS.muted))
         strokes[index] = stroke
     end
+
+    button._resonanceCloseStrokes = strokes
 
     local function Tint(color)
         for _, stroke in ipairs(strokes) do
@@ -329,39 +539,60 @@ local function CreateCloseButton(parent, callback)
     end
 
     button:SetScript("OnEnter", function(self)
-        self:SetBackdropColor(0.05, 0.18, 0.17, 1)
-        self:SetBackdropBorderColor(unpack(COLORS.teal))
-        Tint(COLORS.teal)
+        if not self._resonanceEUI then
+            self:SetBackdropColor(unpack(COLORS.tealDim))
+            self:SetBackdropBorderColor(unpack(COLORS.teal))
+            Tint(COLORS.teal)
+        end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Close", unpack(COLORS.accent))
         GameTooltip:AddLine("Close this window.", COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], true)
         GameTooltip:Show()
     end)
     button:SetScript("OnLeave", function(self)
-        self:SetBackdropColor(unpack(COLORS.cardAlt))
-        self:SetBackdropBorderColor(unpack(COLORS.border))
-        Tint(COLORS.accent)
+        if not self._resonanceEUI then
+            self:SetBackdropColor(unpack(COLORS.raised))
+            self:SetBackdropBorderColor(unpack(COLORS.border))
+            Tint(COLORS.muted)
+        end
         GameTooltip_Hide()
     end)
     button:SetScript("OnClick", callback or function() parent:Hide() end)
+    EUITrack("closeButtons", button)
     return button
 end
 
 local function StyleButton(button, accent)
-    local font = accent and WhiteButtonFont or PurpleButtonFont
+    local font = WhiteButtonFont
     button:SetNormalFontObject(font)
     button:SetHighlightFontObject(font)
     button:SetDisabledFontObject(MutedButtonFont)
-    local color = accent and COLORS.accent or COLORS.cardAlt
+    local color = accent and COLORS.blueSoft or COLORS.raised
     ApplyBackdrop(button, color, COLORS.border)
     if button:GetFontString() then
-        button:GetFontString():SetTextColor(unpack(accent and {1, 1, 1, 1} or COLORS.accent))
+        button:GetFontString():SetTextColor(unpack(COLORS.text))
     end
     button:SetScript("OnEnter", function(self)
-        self:SetBackdropColor(accent and 0.72 or 0.12, accent and 0.57 or 0.12, accent and 1.0 or 0.18, 1)
+        if self._resonanceEUI then return end
+        self:SetBackdropBorderColor(unpack(COLORS.blue))
+        self:SetBackdropColor(0.12, 0.14, 0.17, 1)
     end)
     button:SetScript("OnLeave", function(self)
+        if self._resonanceEUI then return end
         self:SetBackdropColor(unpack(color))
+        self:SetBackdropBorderColor(unpack(COLORS.border))
+    end)
+    button:HookScript("OnDisable", function(self)
+        if self._resonanceEUI then return end
+        self:SetAlpha(0.38)
+        self:SetBackdropColor(unpack(COLORS.cardAlt))
+        self:SetBackdropBorderColor(unpack(COLORS.faint))
+    end)
+    button:HookScript("OnEnable", function(self)
+        if self._resonanceEUI then return end
+        self:SetAlpha(1)
+        self:SetBackdropColor(unpack(color))
+        self:SetBackdropBorderColor(unpack(COLORS.border))
     end)
 end
 
@@ -370,7 +601,7 @@ local function CreateModernCheck(parent, size)
     size = size or 20
     check:SetSize(size, size)
     check.checked = false
-    ApplyBackdrop(check, {0.035, 0.05, 0.07, 1}, {0.10, 0.48, 0.45, 1})
+    ApplyBackdrop(check, COLORS.window, COLORS.border)
     -- Draw a crisp X from two teal strokes. WoW's bundled fonts do not reliably
     -- contain checkmark glyphs and can render them as hollow rectangles.
     check.markA = check:CreateTexture(nil, "OVERLAY")
@@ -389,14 +620,26 @@ local function CreateModernCheck(parent, size)
         self.checked = value == true
         self.markA:SetShown(self.checked)
         self.markB:SetShown(self.checked)
-        self:SetBackdropColor(self.checked and 0.04 or 0.035, self.checked and 0.20 or 0.05, self.checked and 0.18 or 0.07, 1)
-        self:SetBackdropBorderColor(self.checked and COLORS.teal[1] or 0.10, self.checked and COLORS.teal[2] or 0.48, self.checked and COLORS.teal[3] or 0.45, 1)
+        if self._resonanceEUI then
+            -- S.Checkbox may fade pre-existing regions while it installs its
+            -- box treatment. The Resonance X is the intentionally chosen
+            -- check glyph, so restore it above the skin and leave EUI's
+            -- backdrop entirely untouched.
+            self.markA:SetAlpha(1)
+            self.markB:SetAlpha(1)
+            self.markA:SetVertexColor(unpack(COLORS.teal))
+            self.markB:SetVertexColor(unpack(COLORS.teal))
+            return
+        end
+        self:SetBackdropColor(unpack(self.checked and COLORS.tealDim or COLORS.window))
+        self:SetBackdropBorderColor(unpack(self.checked and COLORS.teal or COLORS.border))
     end
     function check:GetChecked() return self.checked end
     check:SetScript("OnMouseDown", function(self, button)
         if button == "LeftButton" then self:SetChecked(not self:GetChecked()) end
     end)
     check:SetChecked(false)
+    EUITrack("checkboxes", check)
     return check
 end
 
@@ -405,10 +648,13 @@ local function CreateButton(parent, text, width, callback, accent)
     button:SetSize(width or 110, 22)
     local label = button:CreateFontString(nil, "ARTWORK")
     label:SetPoint("CENTER")
+    EUITrack("fonts", label)
     button:SetFontString(label)
     button:SetText(text)
     button:SetScript("OnClick", callback)
     StyleButton(button, accent)
+    EUITrack("buttons", button)
+    EUIStateButtonLabel(button)
     return button
 end
 
@@ -417,12 +663,14 @@ local function CreateSection(parent, title, subtitle, height)
     frame:SetHeight(height)
     ApplyBackdrop(frame, COLORS.card)
     AddArcaneTrim(frame, "section")
+    EUITrack("panels", frame, { inset = true })
 
     local titleText
     if title and title ~= "" then
         titleText = CreateText(frame, "GameFontNormalLarge", title)
         titleText:SetPoint("TOPLEFT", 14, -11)
         titleText:SetTextColor(unpack(COLORS.teal))
+        EUITrackAccentText(titleText)
     end
 
     if subtitle and subtitle ~= "" and titleText then
@@ -442,6 +690,13 @@ ns.UI = {
     COLORS = COLORS,
     ApplyBackdrop = ApplyBackdrop,
     SkinScrollFrame = SkinScrollFrame,
+    ApplyEUITheme = ApplyEUITheme,
+    SkinPanel = function(frame, options) return EUITrack("panels", frame, options) end,
+    SkinShell = function(frame, options) return EUITrack("shells", frame, options) end,
+    SkinEditBox = function(frame) return EUITrack("editBoxes", frame) end,
+    TrackAccentText = EUITrackAccentText,
+    TrackAccentTexture = EUITrackAccentTexture,
+    AccentTag = EUIAccentTag,
     CreateText = CreateText,
     CreateButton = CreateButton,
     CreateCloseButton = CreateCloseButton,
@@ -519,14 +774,14 @@ local function CreateCycle(parent, label, values, getter, setter, width)
         end
         index = index % #values + 1
         setter(values[index].value)
-        self:SetText(values[index].label .. "  |cff9d7cff›|r")
+        self:SetText(values[index].label .. "  " .. EUIAccentTag() .. "›|r")
     end)
     button:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
     button.refresh = function(self)
         local current = getter()
         for _, entry in ipairs(values) do
             if entry.value == current then
-                self:SetText(entry.label .. "  |cff9d7cff›|r")
+                self:SetText(entry.label .. "  " .. EUIAccentTag() .. "›|r")
                 return
             end
         end
@@ -552,7 +807,7 @@ local function CreateCompactCycle(parent, values, getter, setter, width)
         local current = getter()
         for _, entry in ipairs(values) do
             if entry.value == current then
-                self:SetText(entry.label .. "  |cff9d7cff›|r")
+                self:SetText(entry.label .. "  " .. EUIAccentTag() .. "›|r")
                 return
             end
         end
@@ -570,7 +825,16 @@ local function CreateEditBox(parent, width)
     box:SetFontObject("GameFontHighlightSmall")
     box:SetJustifyH("LEFT")
     box:SetTextInsets(7, 5, 0, 0)
-    ApplyBackdrop(box, COLORS.panel, COLORS.border)
+    ApplyBackdrop(box, COLORS.window, COLORS.border)
+    box:SetTextColor(unpack(COLORS.text))
+    box:HookScript("OnEditFocusGained", function(self)
+        self:SetBackdropBorderColor(unpack(COLORS.teal))
+        self:SetBackdropColor(unpack(COLORS.panel))
+    end)
+    box:HookScript("OnEditFocusLost", function(self)
+        self:SetBackdropBorderColor(unpack(COLORS.border))
+        self:SetBackdropColor(unpack(COLORS.window))
+    end)
     box:SetScript("OnTextChanged", function(self, userInput)
         if not userInput or self._normalizingNumericText then return end
         local raw = self:GetText() or ""
@@ -584,6 +848,7 @@ local function CreateEditBox(parent, width)
     end)
     box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    EUITrack("editBoxes", box)
     return box
 end
 
@@ -602,8 +867,9 @@ function ns:CreateSoundPicker()
     picker:SetMovable(true)
     picker:SetClampedToScreen(true)
     picker:EnableMouse(true)
-    ApplyBackdrop(picker, COLORS.panel, COLORS.accent)
+    ApplyBackdrop(picker, COLORS.window, COLORS.border)
     AddArcaneTrim(picker, "window")
+    EUITrack("shells", picker, { bottomBar = 50 })
     self.SoundPicker = picker
     picker.selectedIDs = {}
     picker:SetScript("OnHide", function()
@@ -620,7 +886,8 @@ function ns:CreateSoundPicker()
     dragBadge:SetFrameStrata("TOOLTIP")
     dragBadge:SetFrameLevel(1100)
     dragBadge:EnableMouse(false)
-    ApplyBackdrop(dragBadge, {0.04, 0.12, 0.11, 0.96}, COLORS.teal)
+    ApplyBackdrop(dragBadge, COLORS.tealDim, COLORS.teal)
+    EUITrack("panels", dragBadge, { inset = true })
     dragBadge.label = CreateText(dragBadge, "GameFontNormalSmall", "")
     dragBadge.label:SetPoint("LEFT", 10, 0)
     dragBadge.label:SetPoint("RIGHT", -10, 0)
@@ -638,7 +905,7 @@ function ns:CreateSoundPicker()
     close:SetPoint("TOPRIGHT", -4, -4)
     local title = CreateText(picker, "GameFontNormalHuge", "Sound picker")
     title:SetPoint("TOPLEFT", 18, -14)
-    title:SetTextColor(unpack(COLORS.accent))
+    title:SetTextColor(unpack(COLORS.text))
     local help = CreateText(picker, "GameFontHighlightSmall", "Browse a category or search. Click a sound to preview it, then choose Okay to apply it.")
     help:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -7)
     help:SetPoint("RIGHT", picker, "RIGHT", -20, 0)
@@ -656,6 +923,7 @@ function ns:CreateSoundPicker()
     categoryPane:SetPoint("TOPLEFT", 14, -66); categoryPane:SetPoint("BOTTOMLEFT", 14, 54); categoryPane:SetWidth(148)
     ApplyBackdrop(categoryPane, COLORS.cardAlt)
     AddArcaneTrim(categoryPane, "panel")
+    EUITrack("panels", categoryPane, { inset = true })
     picker.categoryPane = categoryPane
     local categoryScroll = CreateFrame("ScrollFrame", nil, categoryPane, "UIPanelScrollFrameTemplate")
     categoryScroll:SetPoint("TOPLEFT", 5, -5)
@@ -705,12 +973,15 @@ function ns:CreateSoundPicker()
     function picker:RefreshCategoryButtons()
         for _, button in ipairs(self.categoryButtons) do
             local isDropTarget = self.dragging and self.dropCategory == button.categoryID
-            if isDropTarget then
-                button:SetBackdropColor(0.06, 0.28, 0.24, 1)
+            local selected = isDropTarget or button.categoryID == self.category
+            if button._resonanceEUI then
+                -- EUI owns the flat button plate. Preserve selection in the
+                -- label rather than repainting a fallback background over it.
+                local label = button:GetFontString()
+                if label then label:SetTextColor(unpack(selected and COLORS.teal or COLORS.text)) end
+            elseif selected then
+                button:SetBackdropColor(unpack(COLORS.tealDim))
                 button:SetBackdropBorderColor(unpack(COLORS.teal))
-            elseif button.categoryID == self.category then
-                button:SetBackdropColor(button.categoryColor[1]*0.35, button.categoryColor[2]*0.35, button.categoryColor[3]*0.35, 1)
-                button:SetBackdropBorderColor(unpack(COLORS.border))
             else
                 button:SetBackdropColor(unpack(COLORS.cardAlt))
                 button:SetBackdropBorderColor(unpack(COLORS.border))
@@ -726,6 +997,7 @@ function ns:CreateSoundPicker()
     search:SetFontObject("GameFontHighlightSmall")
     search:SetTextInsets(9, 9, 0, 0)
     ApplyBackdrop(search, COLORS.cardAlt, COLORS.border)
+    EUITrack("editBoxes", search)
     local searchHint = CreateText(search, "GameFontHighlightSmall", "Search sounds · use AND, OR, |, or quoted phrases")
     searchHint:SetPoint("LEFT", 9, 0)
     searchHint:SetTextColor(unpack(COLORS.muted))
@@ -810,7 +1082,9 @@ function ns:CreateSoundPicker()
         if self.soundButtons[index] then return self.soundButtons[index] end
         local button = CreateFrame("Button", nil, content, "BackdropTemplate")
         button:SetSize(174, 58)
-        ApplyBackdrop(button, COLORS.cardAlt, {0.16,0.17,0.24,1})
+        ApplyBackdrop(button, COLORS.raised, COLORS.border)
+        EUITrack("buttons", button)
+        EUIStateButtonLabel(button)
         button.label = CreateText(button, "GameFontNormal", "")
         button.label:SetPoint("TOPLEFT", 9, -8); button.label:SetPoint("RIGHT", -8, 0); button.label:SetJustifyH("LEFT")
         button.label:SetWordWrap(false)
@@ -882,7 +1156,16 @@ function ns:CreateSoundPicker()
                 local marked = ns:IsSoundMarkedForDelete(sound.id)
                 local selected = IsSoundSortingDebugActive() and self.selectedIDs[sound.id] == true
                 local moved = ns.DB.categoryDraft[sound.id] ~= nil
-                local color = marked and "|cffffa0aa" or (selected and "|cff35d1bd" or "|cff9d7cff")
+                local active = selected or (not IsSoundSortingDebugActive() and self.pendingID == sound.id)
+                local color
+                if button._resonanceEUI then
+                    color = marked and "|cffe14f57"
+                        or active and EUIAccentTag()
+                        or moved and ColorTag(COLORS.warning)
+                        or "|cffe8edf5"
+                else
+                    color = marked and "|cffe14f57" or (selected and ColorTag(COLORS.teal) or EUIAccentTag())
+                end
                 button.label:SetText(color .. sound.label .. "|r")
                 button.detail:SetText(sound.detail or "WoW spell sound")
                 if button.detail.SetMaxLines then button.detail:SetMaxLines(query ~= "" and 1 or 2) end
@@ -890,14 +1173,16 @@ function ns:CreateSoundPicker()
                 button.category:SetShown(query ~= "")
                 button.favoriteStar:SetShown(ns.DB.favorites[sound.id] == true)
                 button.deleteOverlay:SetShown(marked)
-                if selected then
-                    button:SetBackdropBorderColor(unpack(COLORS.teal))
-                elseif moved then
-                    button:SetBackdropBorderColor(0.96, 0.66, 0.16, 1)
-                elseif not IsSoundSortingDebugActive() and self.pendingID == sound.id then
-                    button:SetBackdropBorderColor(unpack(COLORS.teal))
-                else
-                    button:SetBackdropBorderColor(0.16, 0.17, 0.24, 1)
+                if not button._resonanceEUI then
+                    if selected then
+                        button:SetBackdropBorderColor(unpack(COLORS.teal))
+                    elseif moved then
+                        button:SetBackdropBorderColor(unpack(COLORS.warning))
+                    elseif active then
+                        button:SetBackdropBorderColor(unpack(COLORS.teal))
+                    else
+                        button:SetBackdropBorderColor(unpack(COLORS.border))
+                    end
                 end
                 button:Show()
             else
@@ -1003,6 +1288,13 @@ function ns:CreateSoundPicker()
         end
     end)
     picker.favorite:SetPoint("BOTTOMRIGHT", -197, 16)
+    -- Keep long sound names inside their part of the footer. The label owns
+    -- only the space before the action buttons, so it can never render below
+    -- Favorite / Cancel / Okay.
+    picker.selection:SetPoint("BOTTOMRIGHT", picker.favorite, "BOTTOMLEFT", -12, 5)
+    picker.selection:SetJustifyH("CENTER")
+    picker.selection:SetWordWrap(false)
+    if picker.selection.SetMaxLines then picker.selection:SetMaxLines(1) end
     picker.deleteMark = CreateButton(picker, "Mark for delete", 126, function()
         local selectedIDs = picker:GetSelectedSoundIDs(false)
         local allMarked = #selectedIDs > 0
@@ -1076,8 +1368,12 @@ local function CreateMomentCell(parent, rule, cellHeight)
     local cell = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     cell:SetSize(MOMENT_CELL_WIDTH, cellHeight)
     if cell.SetClipsChildren then cell:SetClipsChildren(true) end
-    ApplyBackdrop(cell, COLORS.panel, { 0.12, 0.13, 0.19, 1 })
+    ApplyBackdrop(cell, COLORS.cardAlt, COLORS.accent)
     AddArcaneTrim(cell, "moment")
+    -- Match BindCards' card tier: standard EUI panel fill, one step lighter
+    -- than the deep inset used for wells and nested work areas.
+    EUITrack("panels", cell, { noBorder = true })
+    cell.accentBorder = AddAccentBorder(cell)
     cell.rule = rule
     cell.layerChecks = {}
     cell.swatches = {}
@@ -1106,14 +1402,15 @@ local function CreateMomentCell(parent, rule, cellHeight)
     title:SetJustifyH("LEFT")
     title:SetWordWrap(false)
     title:SetTextColor(unpack(COLORS.teal))
+    EUITrackAccentText(title)
 
     local hearAdded = CreateButton(cell, "", 23, function()
         ns:PlayRule(rule, true)
         if ns.TutorialSignal then ns:TutorialSignal("moment-previewed", rule.id) end
     end, true)
     hearAdded:SetPoint("TOPRIGHT", -4, -3)
-    hearAdded:SetBackdropColor(0.30, 0.09, 0.22, 1)
-    hearAdded:SetBackdropBorderColor(unpack(PLAY_PINK))
+    hearAdded:SetBackdropColor(unpack(COLORS.raised))
+    hearAdded:SetBackdropBorderColor(unpack(COLORS.border))
     local playIcon = hearAdded:CreateTexture(nil, "ARTWORK")
     playIcon:SetSize(12, 12)
     playIcon:SetPoint("CENTER", 1, 0)
@@ -1271,13 +1568,14 @@ local function CreateSpellCard(parent, spellName, spellRules, y)
     -- The spell-list frame is the one enclosing frame. Each row needs only
     -- its identity rail and editable moment cards.
 
-    local rail = CreateFrame("Frame", nil, card, "BackdropTemplate")
+    local rail = CreateFrame("Frame", nil, card)
     rail:SetPoint("TOPLEFT", 0, 0)
     rail:SetPoint("BOTTOMLEFT", 0, 0)
     -- Keep the identity rail close to its moment panels so both read as one
     -- spell record, while preserving enough width for a wrapped spell name.
     rail:SetWidth(MOMENT_CONTENT_LEFT - 8)
-    ApplyBackdrop(rail, { 0.035, 0.04, 0.065, 0.88 }, { 0.18, 0.13, 0.30, 0.90 })
+    -- This is an identity label, not another card. Leaving the rail unboxed
+    -- keeps the visual weight on the editable moment cards to its right.
 
     -- Hearthstone cards are shown only when the corresponding item or toy is
     -- available to this character. Hover the identity rail for its context.
@@ -1294,29 +1592,29 @@ local function CreateSpellCard(parent, spellName, spellRules, y)
     end
 
     local identity = CreateFrame("Frame", nil, rail)
-    identity:SetSize(math.max(84, MOMENT_CONTENT_LEFT - 30), 100)
-    identity:SetPoint("TOP", rail, "TOP", 0, -10)
+    identity:SetSize(math.max(84, MOMENT_CONTENT_LEFT - 20), 1)
+    identity:SetPoint("CENTER", rail, "CENTER", 0, 0)
 
-    local iconFrame = CreateFrame("Frame", nil, identity, "BackdropTemplate")
-    iconFrame:SetSize(40, 40)
-    iconFrame:SetPoint("TOPLEFT", 0, 0)
-    ApplyBackdrop(iconFrame, { 0.015, 0.02, 0.035, 1 }, COLORS.accent)
-    local spellIcon = iconFrame:CreateTexture(nil, "ARTWORK")
-    spellIcon:SetPoint("TOPLEFT", 3, -3)
-    spellIcon:SetPoint("BOTTOMRIGHT", -3, 3)
+    local spellIcon = identity:CreateTexture(nil, "ARTWORK")
+    spellIcon:SetSize(42, 42)
+    spellIcon:SetPoint("TOP", identity, "TOP", 0, 0)
     spellIcon:SetTexture(ResolveSpellIcon(spellRules))
     spellIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     card.spellIcon = spellIcon
 
     local name = CreateText(identity, "GameFontNormal", spellName)
-    name:SetPoint("TOPLEFT", iconFrame, "BOTTOMLEFT", 0, -7)
-    name:SetPoint("RIGHT", identity, "RIGHT", 0, 0)
-    name:SetJustifyH("LEFT")
+    name:SetPoint("TOP", spellIcon, "BOTTOM", 0, -7)
+    name:SetWidth(identity:GetWidth())
+    name:SetJustifyH("CENTER")
     name:SetWordWrap(true)
     local count = CreateText(identity, "GameFontHighlightSmall", #spellRules .. (#spellRules == 1 and " moment" or " moments"))
-    count:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -3)
+    count:SetPoint("TOP", name, "BOTTOM", 0, -3)
+    count:SetWidth(identity:GetWidth())
     count:SetTextColor(unpack(COLORS.muted))
-    count:SetJustifyH("LEFT")
+    count:SetJustifyH("CENTER")
+    local nameHeight = math.max(14, tonumber(name:GetStringHeight()) or 14)
+    local countHeight = math.max(12, tonumber(count:GetStringHeight()) or 12)
+    identity:SetHeight(42 + 7 + nameHeight + 3 + countHeight)
     card.momentCells = {}
     card.ruleCells = {}
     for index, rule in ipairs(spellRules) do
@@ -1326,6 +1624,8 @@ local function CreateSpellCard(parent, spellName, spellRules, y)
     function card:Reflow()
         local columns = GetMomentColumns(self:GetWidth(), #spellRules)
         local height, rowHeights = GetSpellCardLayout(spellRules, columns)
+        identity:ClearAllPoints()
+        identity:SetPoint("CENTER", rail, "TOP", 0, -(rowHeights[1] or height) / 2)
         local rowOffsets = { 0 }
         for row = 2, #rowHeights do rowOffsets[row] = rowOffsets[row - 1] + rowHeights[row - 1] + SPELL_ROW_GAP end
         for index, cell in ipairs(self.momentCells) do
@@ -1465,7 +1765,7 @@ local function BuildGeneral(content, y)
         -- one separated visibility control, then the paired audio actions.
         local divider = section:CreateTexture(nil, "ARTWORK")
         divider:SetTexture("Interface\\Buttons\\WHITE8X8")
-        divider:SetVertexColor(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 0.42)
+        divider:SetVertexColor(unpack(COLORS.faint))
         divider:SetSize(1, 32)
 
         local function LayoutPublicBand()
@@ -1514,8 +1814,9 @@ function ns:CreateSoundSetWindow()
     local window = CreateFrame("Frame", "ResonanceSoundSetWindow", UIParent, "BackdropTemplate")
     window:SetSize(610, 510); window:SetPoint("CENTER"); window:SetFrameStrata("TOOLTIP"); window:SetFrameLevel(920)
     window:SetToplevel(true); window:SetMovable(true); window:SetClampedToScreen(true); window:EnableMouse(true)
-    ApplyBackdrop(window, COLORS.panel, COLORS.accent)
+    ApplyBackdrop(window, COLORS.window, COLORS.border)
     AddArcaneTrim(window, "window")
+    EUITrack("shells", window, { bottomBar = 50 })
     local close = CreateCloseButton(window)
     close:SetPoint("TOPRIGHT", -8, -8)
     local title = CreateText(window, "GameFontNormalLarge", "Sound sets"); title:SetPoint("TOPLEFT", 18, -16)
@@ -1549,7 +1850,7 @@ function ns:CreateSoundSetWindow()
         local sourceName = store and store.loadedName or ns.SUPPORTED_SPECS[specID] or "current sounds"
         loadConfirmPanel.specID = specID
         loadConfirmPanel.setName = setName
-        loadConfirmPanel.message:SetText("Use |cff9d7cff"..setName.."|r? Unsaved changes to |cffffffff"..sourceName.."|r will be replaced. Save them first to keep them.")
+        loadConfirmPanel.message:SetText("Use " .. EUIAccentTag() .. setName .. "|r? Unsaved changes to |cffffffff"..sourceName.."|r will be replaced. Save them first to keep them.")
         loadConfirmPanel:Show()
         loadConfirmPanel:Raise()
     end
@@ -1557,7 +1858,8 @@ function ns:CreateSoundSetWindow()
         if self.rows[index] then return self.rows[index] end
         local row=CreateFrame("Frame",nil,setContent,"BackdropTemplate")
         row:SetHeight(44); row:SetPoint("TOPLEFT",0,-(index-1)*49); row:SetPoint("TOPRIGHT",0,-(index-1)*49)
-        ApplyBackdrop(row,COLORS.cardAlt,{0.16,0.17,0.24,1})
+        ApplyBackdrop(row, COLORS.raised, COLORS.border)
+        EUITrack("panels", row, { inset = true })
         row.name=CreateText(row,"GameFontNormal",""); row.name:SetPoint("TOPLEFT",10,-7)
         row.status=CreateText(row,"GameFontHighlightSmall",""); row.status:SetPoint("BOTTOMLEFT",10,6)
         row.status:SetTextColor(unpack(COLORS.muted)); row.status:SetJustifyH("LEFT"); row.status:SetWordWrap(false)
@@ -1591,7 +1893,8 @@ function ns:CreateSoundSetWindow()
     end
     loadConfirmPanel=CreateFrame("Frame",nil,window,"BackdropTemplate")
     loadConfirmPanel:SetSize(390,146); loadConfirmPanel:SetPoint("CENTER"); loadConfirmPanel:SetFrameLevel(window:GetFrameLevel()+25)
-    loadConfirmPanel:EnableMouse(true); ApplyBackdrop(loadConfirmPanel,COLORS.card,COLORS.accent)
+    loadConfirmPanel:EnableMouse(true); ApplyBackdrop(loadConfirmPanel,COLORS.card,COLORS.border)
+    EUITrack("panels", loadConfirmPanel, { inset = true })
     local loadConfirmTitle=CreateText(loadConfirmPanel,"GameFontNormalLarge","Switch sound set?")
     loadConfirmTitle:SetPoint("TOPLEFT",16,-15)
     loadConfirmPanel.message=CreateText(loadConfirmPanel,"GameFontHighlightSmall","")
@@ -1606,7 +1909,8 @@ function ns:CreateSoundSetWindow()
     loadConfirmPanel:Hide(); window.loadConfirmPanel=loadConfirmPanel
     namePanel=CreateFrame("Frame",nil,window,"BackdropTemplate")
     namePanel:SetSize(360,132); namePanel:SetPoint("CENTER"); namePanel:SetFrameLevel(window:GetFrameLevel()+20)
-    namePanel:EnableMouse(true); ApplyBackdrop(namePanel,COLORS.card,COLORS.accent)
+    namePanel:EnableMouse(true); ApplyBackdrop(namePanel,COLORS.card,COLORS.border)
+    EUITrack("panels", namePanel, { inset = true })
     local nameTitle=CreateText(namePanel,"GameFontNormalLarge","Name your sound set")
     nameTitle:SetPoint("TOPLEFT",16,-14)
     local nameHelp=CreateText(namePanel,"GameFontHighlightSmall","Save the current sounds as another set. Your Personal set stays unchanged.")
@@ -1614,6 +1918,7 @@ function ns:CreateSoundSetWindow()
     nameBox=CreateFrame("EditBox",nil,namePanel,"BackdropTemplate")
     nameBox:SetSize(328,24); nameBox:SetPoint("TOPLEFT",16,-58); nameBox:SetAutoFocus(false); nameBox:SetMaxLetters(32)
     nameBox:SetFontObject("GameFontHighlight"); nameBox:SetTextInsets(8,8,0,0); ApplyBackdrop(nameBox,COLORS.panel,COLORS.border)
+    EUITrack("editBoxes", nameBox)
     local function CommitNewSoundSet()
         local saved, reason
         if namePanel.mode == "rename" then
@@ -1660,7 +1965,8 @@ function ns:CreateSoundSetWindow()
 
     local transfer=CreateFrame("Frame",nil,window,"BackdropTemplate")
     transfer:SetSize(450,310); transfer:SetPoint("CENTER"); transfer:SetFrameLevel(window:GetFrameLevel()+30)
-    transfer:EnableMouse(true); ApplyBackdrop(transfer,COLORS.panel,COLORS.accent)
+    transfer:EnableMouse(true); ApplyBackdrop(transfer,COLORS.panel,COLORS.border)
+    EUITrack("panels", transfer, { inset = true })
     local transferClose=CreateCloseButton(transfer)
     transferClose:SetPoint("TOPRIGHT",-8,-8)
     transfer.title=CreateText(transfer,"GameFontNormalLarge","")
@@ -1673,10 +1979,12 @@ function ns:CreateSoundSetWindow()
     local textScroll=CreateFrame("ScrollFrame",nil,transfer,"BackdropTemplate")
     textScroll:SetPoint("TOPLEFT",16,-72); textScroll:SetPoint("BOTTOMRIGHT",-16,60)
     textScroll:EnableMouseWheel(true); ApplyBackdrop(textScroll,COLORS.cardAlt,COLORS.border)
+    EUITrack("panels", textScroll, { inset = true })
     local textBox=CreateFrame("EditBox",nil,textScroll)
     textBox:SetMultiLine(true); textBox:SetAutoFocus(false); textBox:SetFontObject("GameFontHighlightSmall")
     textBox:SetWidth(400); textBox:SetHeight(170); textBox:SetTextInsets(8,8,8,8)
     textBox:SetMaxLetters(100000); textScroll:SetScrollChild(textBox)
+    EUITrack("editBoxes", textBox)
     textBox:SetScript("OnTextChanged",function(self)
         local textHeight = tonumber(self.GetStringHeight and self:GetStringHeight()) or 150
         self:SetHeight(math.max(170, textHeight + 20))
@@ -1751,7 +2059,7 @@ function ns:CreateSoundSetWindow()
             local isLoaded = store.loadedName == name
             local status, statusColor
             if isLoaded and store.dirty == true then
-                status, statusColor = "Changed · click Save changes to update this set", {0.96,0.66,0.16,1}
+                status, statusColor = "Changed · click Save changes to update this set", COLORS.warning
             elseif automatic then
                 status, statusColor = isLoaded and "Personal set · active" or "Personal set · created on your first edit", COLORS.teal
             elseif builtin then
@@ -1761,7 +2069,7 @@ function ns:CreateSoundSetWindow()
             else
                 status, statusColor = "Saved named set", COLORS.muted
             end
-            row.name:SetText((isLoaded and "|cff35d1bd" or "|cff9d7cff")..name)
+            row.name:SetText((isLoaded and EUIAccentTag() or "|cffe8edf5") .. name)
             row.status:SetText(status); row.status:SetTextColor(unpack(statusColor))
             row.isBuiltin = builtin
             row.rename:SetShown(not builtin)
@@ -1770,10 +2078,10 @@ function ns:CreateSoundSetWindow()
             row.overwrite:SetShown(isLoaded and store.dirty == true)
             row.delete:SetShown(not builtin and not automatic and not isLoaded)
             if isLoaded then
-                local border = store.dirty == true and {0.96,0.66,0.16,1} or COLORS.teal
+                local border = store.dirty == true and COLORS.warning or COLORS.teal
                 ApplyBackdrop(row, COLORS.cardAlt, border)
             else
-                ApplyBackdrop(row, COLORS.cardAlt, {0.16,0.17,0.24,1})
+                ApplyBackdrop(row, COLORS.raised, COLORS.border)
             end
             row:Show()
         end
@@ -1856,16 +2164,16 @@ local function BuildSpecSection(content, specID, y)
         if store and store.loadedName then
             local activeSet = store.savedSets and store.savedSets[store.loadedName]
             if store.dirty == true then
-                currentSet:SetText("Editing: "..store.loadedName.."  |cffffb84d• Save changes|r")
+                currentSet:SetText("Editing: "..store.loadedName.."  |cffeda940• Save changes|r")
             elseif activeSet and activeSet.automatic == true then
-                currentSet:SetText("|cff35d1bdPersonal set: "..store.loadedName.."|r")
+                currentSet:SetText(EUIAccentTag() .. "Personal set: "..store.loadedName.."|r")
             elseif activeSet and activeSet.builtin == true then
                 currentSet:SetText("Built-in preset: "..store.loadedName)
             else
                 currentSet:SetText("Active set: "..store.loadedName)
             end
         elseif store and store.dirty == true then
-            currentSet:SetText("|cffffb84dChanged · Save changes|r")
+            currentSet:SetText("|cffeda940Changed · Save changes|r")
         else
             currentSet:SetText("Working set")
         end
@@ -1880,7 +2188,8 @@ local function BuildSpecSection(content, specID, y)
     spellList:SetHeight(1)
     -- The list frame defines the boundary only. Darkness belongs to the
     -- editable identity and moment cards inside it.
-    ApplyBackdrop(spellList, { 0.02, 0.025, 0.04, 0 }, { 0.19, 0.20, 0.27, 0.95 })
+    ApplyBackdrop(spellList, { 0, 0, 0, 0 }, { 0, 0, 0, 0 })
+    EUITrack("panels", spellList, { noBg = true, noBorder = true })
     section.spellList = spellList
 
     local rowY = -SPELL_LIST_INSET
@@ -1940,11 +2249,23 @@ local function BuildSpecTabs(content, y)
     tabs:SetPoint("TOPLEFT",0,y); tabs:SetPoint("TOPRIGHT",0,y)
     ApplyBackdrop(tabs,COLORS.card)
     AddArcaneTrim(tabs, "panel")
+    EUITrack("panels", tabs, { inset = true })
     for index,specID in ipairs(specs) do
         local button=CreateFrame("Button",nil,tabs,"BackdropTemplate"); button:SetSize(30,30)
         buttons[index] = button
         ApplyBackdrop(button,COLORS.cardAlt,COLORS.border)
         local icon=button:CreateTexture(nil,"ARTWORK"); icon:SetPoint("TOPLEFT",3,-3); icon:SetPoint("BOTTOMRIGHT",-3,3)
+        button.Icon = icon
+        EUITrack("buttons", button, { "Icon" })
+        EUIStateButtonLabel(button)
+        local activeMark = button:CreateTexture(nil, "OVERLAY")
+        activeMark:SetPoint("BOTTOMLEFT", 3, 3)
+        activeMark:SetPoint("BOTTOMRIGHT", -3, 3)
+        activeMark:SetHeight(2)
+        activeMark:SetColorTexture(unpack(COLORS.teal))
+        EUITrackAccentTexture(activeMark)
+        activeMark:Hide()
+        button.activeMark = activeMark
         local specIcon
         if GetSpecializationInfoByID then
             local ok, _, _, _, result = pcall(GetSpecializationInfoByID, specID)
@@ -1968,8 +2289,15 @@ local function BuildSpecTabs(content, y)
             AddTooltip(button,ns.SUPPORTED_SPECS[specID],"Show this specialization's moments and sound sets.")
         end
         button.refresh=function(self)
-            if ns.SelectedOptionsSpec==specID then self:SetBackdropBorderColor(unpack(COLORS.teal)); self:SetBackdropColor(0.10,0.20,0.20,1)
-            else self:SetBackdropBorderColor(unpack(COLORS.border)); self:SetBackdropColor(unpack(COLORS.cardAlt)) end
+            local selected = ns.SelectedOptionsSpec == specID
+            if self.activeMark then
+                self.activeMark:SetColorTexture(unpack(COLORS.teal))
+                self.activeMark:SetShown(selected)
+            end
+            if not self._resonanceEUI then
+                if selected then self:SetBackdropBorderColor(unpack(COLORS.teal)); self:SetBackdropColor(unpack(COLORS.tealDim))
+                else self:SetBackdropBorderColor(unpack(COLORS.border)); self:SetBackdropColor(unpack(COLORS.cardAlt)) end
+            end
         end
         RegisterOptionWidget(button)
     end
@@ -1977,6 +2305,8 @@ local function BuildSpecTabs(content, y)
     local expand = CreateFrame("Button", nil, tabs, "BackdropTemplate")
     expand:SetSize(30, 30)
     ApplyBackdrop(expand, COLORS.cardAlt, COLORS.border)
+    EUITrack("buttons", expand)
+    EUIStateButtonLabel(expand)
     local gridOffsets = { {-5, 5}, {5, 5}, {-5, -5}, {5, -5} }
     for _, offset in ipairs(gridOffsets) do
         local square = expand:CreateTexture(nil, "ARTWORK")
@@ -1984,6 +2314,7 @@ local function BuildSpecTabs(content, y)
         square:SetSize(7, 7)
         square:SetPoint("CENTER", offset[1], offset[2])
         square:SetVertexColor(unpack(COLORS.accent))
+        EUITrackAccentTexture(square)
     end
     AddTooltip(expand, "All specializations", "Expand or collapse specializations from other classes.")
     expand:SetScript("OnClick", function()
@@ -2012,8 +2343,10 @@ local function BuildSpecTabs(content, y)
             button:ClearAllPoints()
             button:SetPoint("TOPLEFT", 10 + column * 36, -4 - row * 34)
         end
-        expand:SetBackdropBorderColor(unpack(self._expanded and COLORS.teal or COLORS.border))
-        expand:SetBackdropColor(unpack(self._expanded and {0.10, 0.20, 0.20, 1} or COLORS.cardAlt))
+        if not expand._resonanceEUI then
+            expand:SetBackdropBorderColor(unpack(self._expanded and COLORS.teal or COLORS.border))
+            expand:SetBackdropColor(unpack(self._expanded and COLORS.tealDim or COLORS.cardAlt))
+        end
 
         local sectionY = self._topY - height - 6
         ns.SpecSectionY = sectionY
@@ -2124,7 +2457,7 @@ function ns:RegisterSettingsLauncher()
         launcher.name = "Resonance"
         local launcherTitle = CreateText(launcher, "GameFontNormalHuge", "Resonance")
         launcherTitle:SetPoint("TOPLEFT", 24, -24)
-        launcherTitle:SetTextColor(unpack(COLORS.accent))
+        launcherTitle:SetTextColor(unpack(COLORS.text))
         local launcherText = CreateText(launcher, "GameFontHighlight", "Resonance uses a standalone window so every per-spell control remains visible.")
         launcherText:SetPoint("TOPLEFT", launcherTitle, "BOTTOMLEFT", 0, -12)
         local openButton = CreateButton(launcher, "Open Resonance", 180, function() ns:OpenOptions() end, true)
@@ -2160,8 +2493,9 @@ function ns:CreateOptions()
         local minimumWidth = math.min(900, uiWidth - 20)
         panel:SetResizeBounds(minimumWidth, 540, math.max(minimumWidth, uiWidth - 20), math.max(540, uiHeight - 20))
     end
-    ApplyBackdrop(panel, COLORS.panel, COLORS.border)
+    ApplyBackdrop(panel, COLORS.window, COLORS.border)
     AddArcaneTrim(panel, "window")
+    EUITrack("shells", panel, { bottomBar = DEBUG_SOUND_TOOLS_VISIBLE and 52 or 18 })
     self.OptionsPanel = panel
     -- Keep a partially constructed panel invisible if a future widget errors.
     panel:Hide()
@@ -2183,25 +2517,26 @@ function ns:CreateOptions()
     resizer:SetScript("OnMouseUp", function() panel:StopMovingOrSizing() end)
 
     local header = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    header:SetPoint("TOPLEFT", 12, -12)
-    header:SetPoint("TOPRIGHT", -12, -12)
-    header:SetHeight(76)
-    ApplyBackdrop(header, { 0.085, 0.055, 0.14, 1 }, COLORS.accent)
+    header:SetPoint("TOPLEFT", 10, -10)
+    header:SetPoint("TOPRIGHT", -10, -10)
+    header:SetHeight(70)
+    ApplyBackdrop(header, COLORS.window, COLORS.border)
     AddArcaneTrim(header, "header")
+    EUITrack("panels", header)
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function() panel:StartMoving() end)
     header:SetScript("OnDragStop", function() panel:StopMovingOrSizing() end)
 
     local icon = header:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(42, 42)
-    icon:SetPoint("LEFT", 14, 0)
+    icon:SetSize(38, 38)
+    icon:SetPoint("LEFT", 16, 0)
     icon:SetTexture(ns.ICON_TEXTURE)
     icon:SetTexCoord(0, 1, 0, 1)
 
     local title = CreateText(header, "GameFontNormalLarge", "Resonance")
-    title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 12, -1)
-    title:SetTextColor(unpack(COLORS.accent))
+    title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 12, -3)
+    title:SetTextColor(unpack(COLORS.text))
     local subtitle = CreateText(header, "GameFontHighlightSmall", "Spell sound layers")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 1, -4)
     subtitle:SetTextColor(unpack(COLORS.muted))
@@ -2209,6 +2544,7 @@ function ns:CreateOptions()
     local version = CreateText(header, "GameFontHighlightSmall", "v" .. self.VERSION .. "  •  Retail 12.1")
     version:SetPoint("TOPRIGHT", -18, -16)
     version:SetTextColor(unpack(COLORS.teal))
+    EUITrackAccentText(version)
     local creator = CreateText(header, "GameFontHighlightSmall", "by Mimezu")
     creator:SetPoint("TOPRIGHT", version, "BOTTOMRIGHT", 0, -4)
     creator:SetTextColor(unpack(COLORS.muted))
@@ -2222,7 +2558,7 @@ function ns:CreateOptions()
     -- the internal catalog tools are brought back.
     local footerInset = DEBUG_SOUND_TOOLS_VISIBLE and 52 or 12
     local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -12)
+    scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
     scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, footerInset)
     local content = CreateFrame("Frame", nil, scroll)
     content:SetWidth(math.max(760, panel:GetWidth() - 50))
@@ -2296,7 +2632,7 @@ function ns:CreateOptions()
             sortingStatus:SetText(dirty
                 and string.format("Unsaved • %d moved • %d delete", moveCount, deletionCount)
                 or string.format("Saved • %d moved • %d delete", moveCount, deletionCount))
-            sortingStatus:SetTextColor(unpack(dirty and {0.96, 0.66, 0.16, 1} or COLORS.teal))
+            sortingStatus:SetTextColor(unpack(dirty and COLORS.warning or COLORS.teal))
         end
         RegisterOptionWidget(saveSorting)
     end
@@ -2362,3 +2698,9 @@ StaticPopupDialogs.RESONANCE_RESET_CONFIRM = {
     hideOnEscape = true,
     preferredIndex = 3,
 }
+
+if EllesmereUI and type(EllesmereUI.RegisterSkin) == "function" then
+    EllesmereUI.RegisterSkin("Resonance", function(skin)
+        ApplyEUITheme(skin)
+    end)
+end

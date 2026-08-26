@@ -167,8 +167,9 @@ local function CreateOverlay()
     coach:SetSize(390, 218)
     coach:SetFrameLevel(root:GetFrameLevel() + 10)
     coach:EnableMouse(true)
-    UI.ApplyBackdrop(coach, { 0.035, 0.04, 0.065, 0.99 }, COLORS.accent)
+    UI.ApplyBackdrop(coach, COLORS.window, COLORS.border)
     UI.AddArcaneTrim(coach, "window")
+    UI.SkinPanel(coach, { inset = true })
     Tutorial.coach = coach
 
     coach.progress = UI.CreateText(coach, "GameFontHighlightSmall", "")
@@ -310,7 +311,7 @@ function ns:SetTutorialStep(stepNumber)
     coach.title:SetText(step.title)
     local body = step.body
     if stepNumber == 1 and Tutorial.hadDirtyWork then
-        body = body .. "\n\n|cffffb84dYou already have unsaved changes. The tutorial keeps them and never saves or overwrites them.|r"
+        body = body .. "\n\n|cffeda940You already have unsaved changes. The tutorial keeps them and never saves or overwrites them.|r"
     end
     coach.body:SetText(body)
     coach.back:SetEnabled(stepNumber > 1)
